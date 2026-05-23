@@ -1,11 +1,18 @@
 .DS_Store
 Thumbs.db
 
-ltc2meta.exe
-ltc2meta
+tcforge.exe
+tcforge
 
 *.tmp
 *.wav
+
+*.mp4
+*.MP4
+*.mov
+*.MOV
+*.mxf
+*.MXF
 
 dist/
 bin/

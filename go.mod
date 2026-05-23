@@ -1,3 +1,3 @@
-module github.com/ggvisuals/ltc2meta
+module github.com/gguillory-hub/tcforge
 
 go 1.22

@@ -18,9 +18,10 @@ type BatchResult struct {
 
 func runBatch(args []string) error {
 	fs := flag.NewFlagSet("batch", flag.ContinueOnError)
-	channel := fs.String("channel", "", "audio channel containing LTC: left, right, 1, or 2")
+	channel := fs.String("channel", "auto", "audio channel containing LTC: auto, left, right, 1, or 2")
 	fps := fs.String("fps", "", "timecode frame rate")
 	outputDir := fs.String("output-dir", "", "output folder")
+	clean := fs.Bool("clean", false, "write clean NLE timecode files with video plus generated tmcd only")
 	drop := fs.Bool("drop-ltc-audio", false, "drop the first audio stream instead of preserving it")
 	overwrite := fs.Bool("overwrite", false, "overwrite outputs if they exist")
 	dryRun := fs.Bool("dry-run", false, "print planned commands without writing media")
@@ -59,7 +60,7 @@ func runBatch(args []string) error {
 		out := filepath.Join(*outputDir, base)
 		result, err := writeOne(context.Background(), WriteOptions{
 			Input: file, Output: out, Channel: *channel, FPS: *fps,
-			DropLTCAudio: *drop, Overwrite: *overwrite, DryRun: *dryRun,
+			Clean: *clean, DropLTCAudio: *drop, Overwrite: *overwrite, DryRun: *dryRun,
 		})
 		if err != nil {
 			failed++

@@ -14,13 +14,13 @@ Use short clips first. Keep originals read-only and write outputs to a separate 
 ffmpeg -version
 ffprobe -version
 ltcdump --help
-ltc2meta probe .\A7IV_TEST.MP4
+tcforge probe .\A7IV_TEST.MP4
 ```
 
 ## Single Clip
 
 ```powershell
-ltc2meta write .\A7IV_TEST.MP4 --channel right --fps 23.976 --output .\synced\A7IV_TEST.mov --verbose
+tcforge write .\A7IV_TEST.MP4 --channel right --fps 23.976 --output .\synced\A7IV_TEST.mov --verbose
 ```
 
 Expected:
@@ -34,7 +34,7 @@ Expected:
 ## Batch
 
 ```powershell
-ltc2meta batch .\clips --channel right --fps 23.976 --output-dir .\synced --verbose
+tcforge batch .\clips --channel right --fps 23.976 --output-dir .\synced --verbose
 ```
 
 Expected:
@@ -45,7 +45,7 @@ Expected:
 ## Failure Cases
 
 ```powershell
-ltc2meta write .\A7IV_TEST.MP4 --channel left --fps 23.976 --output .\synced\wrong-channel.mov
+tcforge write .\A7IV_TEST.MP4 --channel left --fps 23.976 --output .\synced\wrong-channel.mov
 ```
 
 Expected:

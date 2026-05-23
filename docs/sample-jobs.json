@@ -1,0 +1,14 @@
+[
+  {
+    "input": "C1315.MP4",
+    "output": "manifest-test/C1315_manifest.mov",
+    "channel": "auto",
+    "clean": true
+  },
+  {
+    "input": "A013C003_260522DM.MXF",
+    "output": "manifest-test/FX6_manifest.mov",
+    "channel": "auto",
+    "clean": true
+  }
+]
