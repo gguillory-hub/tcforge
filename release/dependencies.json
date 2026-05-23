@@ -20,21 +20,21 @@
       "name": "ltc-tools",
       "provides": ["ltcdump"],
       "platforms": ["windows-x64", "macos-arm64"],
-      "version": "pinned by release preparation step",
+      "version": "0.7.0 for Windows CI build; pinned by platform preparation step elsewhere",
       "license": "GPL-2.0-only",
       "project_url": "https://github.com/x42/ltc-tools",
       "source_url": "https://github.com/x42/ltc-tools",
-      "download_note": "Use a pinned platform build or build from source before running release/package.ps1."
+      "download_note": "Windows CI builds ltcdump from the v0.7.0 source tag before running release/package.ps1."
     },
     {
       "name": "libltc",
       "provides": ["runtime support for ltc-tools builds when dynamically linked"],
       "platforms": ["windows-x64", "macos-arm64"],
-      "version": "pinned by release preparation step when bundled",
+      "version": "1.3.2 for Windows CI build; pinned by platform preparation step elsewhere",
       "license": "LGPL-3.0-only",
       "project_url": "https://github.com/x42/libltc",
       "source_url": "https://github.com/x42/libltc",
-      "download_note": "Include only if the bundled ltcdump build requires a separate libltc runtime library."
+      "download_note": "Windows CI builds libltc from the v1.3.2 release tarball and bundles the runtime DLL when required."
     }
   ]
 }

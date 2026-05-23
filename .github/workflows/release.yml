@@ -32,7 +32,18 @@ jobs:
           update: true
           install: >-
             mingw-w64-x86_64-ffmpeg
-            mingw-w64-x86_64-ltc-tools
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-libsndfile
+            autoconf
+            automake
+            curl
+            libtool
+            make
+            tar
+      - name: Build ltcdump
+        shell: msys2 {0}
+        run: bash release/build-ltcdump-msys2.sh
       - name: Install release tools
         shell: pwsh
         run: |
