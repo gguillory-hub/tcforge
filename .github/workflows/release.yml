@@ -103,6 +103,12 @@ jobs:
           $commit = "${{ github.sha }}"
           $date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
           ./release/package.ps1 -Platform macos-arm64 -Version $version -Commit $commit -Date $date -DependencyDir deps
+      - name: Smoke test macOS package
+        run: |
+          dist/tcforge-macos-arm64/tcforge --version
+          dist/tcforge-macos-arm64/tools/ffprobe --version
+          dist/tcforge-macos-arm64/tools/ffmpeg -version
+          dist/tcforge-macos-arm64/tools/ltcdump -h >/dev/null || true
       - uses: actions/upload-artifact@v4
         with:
           name: tcforge-macos-arm64

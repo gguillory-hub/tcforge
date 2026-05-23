@@ -79,6 +79,30 @@ function New-Sha256Manifest {
     Set-Content -LiteralPath $OutputPath -Value $lines -Encoding utf8
 }
 
+function Invoke-MacOSAdHocSign {
+	param([string] $Root)
+
+	$codesign = Find-CommandPath "codesign"
+	if ($null -eq $codesign) {
+		throw "codesign was not found; cannot ad-hoc sign macOS package."
+	}
+
+	$files = Get-ChildItem -LiteralPath $Root -Recurse -File | Sort-Object FullName
+	foreach ($file in $files) {
+		$name = $file.Name
+		$shouldSign = $name -eq "tcforge" -or
+			$name -eq "ffmpeg" -or
+			$name -eq "ffprobe" -or
+			$name -eq "ltcdump" -or
+			$name.EndsWith(".dylib") -or
+			$name -like "*.dylib.*"
+
+		if ($shouldSign) {
+			& $codesign --force --sign - --timestamp=none $file.FullName
+		}
+	}
+}
+
 $repo = Resolve-RepoRoot
 $dist = Join-Path $repo $OutputRoot
 $stageName = "tcforge-$Platform"
@@ -157,6 +181,10 @@ Then run:
 
 No Go installation is required.
 "@
+
+if ($Platform -eq "macos-arm64") {
+	Invoke-MacOSAdHocSign -Root $stage
+}
 
 New-Sha256Manifest -Root $stage -OutputPath (Join-Path $stage "SHA256SUMS.txt")
 
