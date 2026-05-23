@@ -48,3 +48,42 @@ begin
   end;
   Result := Pos(';' + UpperCase(Dir) + ';', ';' + UpperCase(Path) + ';') = 0;
 end;
+
+function RemovePathEntry(Path: string; Dir: string): string;
+var
+  Pieces: TArrayOfString;
+  I: Integer;
+  CleanPath: string;
+begin
+  CleanPath := '';
+  StringChangeEx(Path, ';;', ';', True);
+  Pieces := StringSplit(Path, [';'], stExcludeEmpty);
+  for I := 0 to GetArrayLength(Pieces) - 1 do
+  begin
+    if UpperCase(Trim(Pieces[I])) <> UpperCase(Trim(Dir)) then
+    begin
+      if CleanPath <> '' then
+        CleanPath := CleanPath + ';';
+      CleanPath := CleanPath + Pieces[I];
+    end;
+  end;
+  Result := CleanPath;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Path: string;
+  UpdatedPath: string;
+  Dir: string;
+begin
+  if CurUninstallStep <> usUninstall then
+    exit;
+
+  Dir := ExpandConstant('{app}');
+  if not RegQueryStringValue(HKCU, 'Environment', 'Path', Path) then
+    exit;
+
+  UpdatedPath := RemovePathEntry(Path, Dir);
+  if UpdatedPath <> Path then
+    RegWriteExpandStringValue(HKCU, 'Environment', 'Path', UpdatedPath);
+end;

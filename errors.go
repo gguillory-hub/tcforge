@@ -44,10 +44,19 @@ func appErrorSummary(err error) string {
 }
 
 func wrapProbeError(input string, err error) error {
+	summary := fmt.Sprintf("Could not read %s as a valid media file.", input)
+	suggestion := "Confirm the file is a playable video and try opening it with ffprobe or your NLE. If it is still copying from a card, wait for the copy to finish."
+
+	var appErr *AppError
+	if errors.As(err, &appErr) && appErr.Code == "external_tool_failed" {
+		summary += "\n" + appErr.Summary
+		suggestion = "Check the bundled ffprobe in tools/. On macOS unsigned releases, run: xattr -dr com.apple.quarantine tcforge-macos-arm64"
+	}
+
 	return appError(
 		"invalid_media",
-		fmt.Sprintf("Could not read %s as a valid media file.", input),
-		"Confirm the file is a playable video and try opening it with ffprobe or your NLE. If it is still copying from a card, wait for the copy to finish.",
+		summary,
+		suggestion,
 		err,
 	)
 }

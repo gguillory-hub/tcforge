@@ -66,7 +66,11 @@ macOS Apple Silicon releases include:
 
 - `tcforge-macos-arm64.tar.gz`: portable package
 
-The first release builds are unsigned. Windows may show a SmartScreen warning, and macOS may require approval in Privacy & Security before running the downloaded binary.
+The first release builds are unsigned. Windows may show a SmartScreen warning, and macOS may require approval in Privacy & Security before running the downloaded binary. On macOS, clear quarantine for the whole extracted package so `tcforge`, `ffmpeg`, `ffprobe`, and `ltcdump` are all approved together:
+
+```bash
+xattr -dr com.apple.quarantine tcforge-macos-arm64
+```
 
 ## Quick Start
 

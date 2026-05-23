@@ -147,7 +147,13 @@ tcforge $Version
 This portable package includes tcforge and bundled external tools in tools/.
 
 Windows: run tcforge.exe from PowerShell or install with the unsigned installer.
-macOS Apple Silicon: run ./tcforge from Terminal. Because this build is unsigned, macOS may require you to approve it in Privacy & Security or remove quarantine attributes after download.
+macOS Apple Silicon: run ./tcforge from Terminal. Because this build is unsigned, macOS may quarantine tcforge and the bundled tools. From the folder containing the extracted package, run:
+
+  xattr -dr com.apple.quarantine tcforge-macos-arm64
+
+Then run:
+
+  ./tcforge --version
 
 No Go installation is required.
 "@
