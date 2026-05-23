@@ -8,6 +8,12 @@ import (
 	"strings"
 )
 
+var (
+	version = "dev"
+	commit  = ""
+	date    = ""
+)
+
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
@@ -36,7 +42,7 @@ func run(args []string) error {
 		printUsage()
 		return nil
 	case "--version", "version":
-		fmt.Println("tcforge dev")
+		fmt.Println(versionString())
 		return nil
 	default:
 		if !strings.HasPrefix(args[0], "-") {
@@ -59,7 +65,21 @@ Usage:
   tcforge batch <folder> --channel auto|left|right|1|2 --fps <fps> --output-dir <folder> [--clean] [--drop-ltc-audio] [--overwrite] [--dry-run] [--json] [--verbose]
 
 Required external tools on PATH:
-  ffmpeg, ffprobe, ltcdump`)
+  ffmpeg, ffprobe, ltcdump
+
+Packaged releases also look for bundled tools in:
+  tools\ beside the tcforge executable`)
+}
+
+func versionString() string {
+	parts := []string{"tcforge", version}
+	if commit != "" {
+		parts = append(parts, "commit="+commit)
+	}
+	if date != "" {
+		parts = append(parts, "built="+date)
+	}
+	return strings.Join(parts, " ")
 }
 
 func printJSON(v any) error {

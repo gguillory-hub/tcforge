@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "notes": [
+    "Release tooling records bundled binary checksums in SHA256SUMS.txt at package time.",
+    "Keep source_url and license fields current whenever dependency versions change."
+  ],
+  "dependencies": [
+    {
+      "name": "ffmpeg",
+      "provides": ["ffmpeg", "ffprobe"],
+      "platforms": ["windows-x64", "macos-arm64"],
+      "version": "7.x pinned by release preparation step",
+      "license": "LGPL-2.1-or-later or GPL-2.0-or-later depending on selected build flags",
+      "project_url": "https://ffmpeg.org/",
+      "legal_url": "https://ffmpeg.org/legal.html",
+      "source_url": "https://git.ffmpeg.org/ffmpeg.git",
+      "download_note": "Use a pinned platform build or build from source before running release/package.ps1."
+    },
+    {
+      "name": "ltc-tools",
+      "provides": ["ltcdump"],
+      "platforms": ["windows-x64", "macos-arm64"],
+      "version": "pinned by release preparation step",
+      "license": "GPL-2.0-only",
+      "project_url": "https://github.com/x42/ltc-tools",
+      "source_url": "https://github.com/x42/ltc-tools",
+      "download_note": "Use a pinned platform build or build from source before running release/package.ps1."
+    },
+    {
+      "name": "libltc",
+      "provides": ["runtime support for ltc-tools builds when dynamically linked"],
+      "platforms": ["windows-x64", "macos-arm64"],
+      "version": "pinned by release preparation step when bundled",
+      "license": "LGPL-3.0-only",
+      "project_url": "https://github.com/x42/libltc",
+      "source_url": "https://github.com/x42/libltc",
+      "download_note": "Include only if the bundled ltcdump build requires a separate libltc runtime library."
+    }
+  ]
+}

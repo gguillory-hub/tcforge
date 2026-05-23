@@ -41,7 +41,9 @@ Required external tools:
 - `ffprobe`
 - `ltcdump` from [`ltc-tools`](https://github.com/x42/ltc-tools)
 
-These must be available on `PATH`, except on Windows where `tcforge` also checks:
+Official release packages include these tools in a `tools` folder beside the `tcforge` executable, so normal users do not need to install them separately.
+
+When running from source or using a bare development binary, these tools must be available on `PATH`, except on Windows where `tcforge` also checks:
 
 ```text
 C:\Users\<you>\tools\ltcdump\ltcdump.exe
@@ -52,6 +54,19 @@ You can override tool paths with environment variables:
 ```powershell
 $env:TCFORGE_LTCDUMP = "C:\Users\you\tools\ltcdump\ltcdump.exe"
 ```
+
+## Installing Release Builds
+
+Windows x64 releases include:
+
+- `tcforge-windows-x64.zip`: portable package
+- `tcforge-windows-x64-setup.exe`: unsigned installer that installs `tcforge` and adds it to your user `PATH`
+
+macOS Apple Silicon releases include:
+
+- `tcforge-macos-arm64.tar.gz`: portable package
+
+The first release builds are unsigned. Windows may show a SmartScreen warning, and macOS may require approval in Privacy & Security before running the downloaded binary.
 
 ## Quick Start
 
@@ -235,7 +250,13 @@ go test ./...
 go run . probe input.MP4
 ```
 
-`tcforge` shells out to `ltc-tools` and does not copy, modify, or link GPL `ltc-tools` code.
+Build local release packages with:
+
+```powershell
+.\release\package.ps1 -Platform windows-x64 -Version dev -DependencyDir C:\path\to\deps
+```
+
+The dependency directory must contain `ffmpeg`, `ffprobe`, and `ltcdump` for the target platform. Packaged releases include third-party notices and `SHA256SUMS.txt` for bundled files.
 
 ## Contributing
 

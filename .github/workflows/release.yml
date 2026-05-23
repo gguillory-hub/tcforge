@@ -1,0 +1,110 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test ./...
+
+  package-windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-ffmpeg
+            mingw-w64-x86_64-ltc-tools
+      - name: Install release tools
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+      - name: Prepare dependency directory
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path deps | Out-Null
+          Copy-Item C:\msys64\mingw64\bin\ffmpeg.exe deps\ffmpeg.exe -Force
+          Copy-Item C:\msys64\mingw64\bin\ffprobe.exe deps\ffprobe.exe -Force
+          Copy-Item C:\msys64\mingw64\bin\ltcdump.exe deps\ltcdump.exe -Force
+          Copy-Item C:\msys64\mingw64\bin\*.dll deps\ -Force
+      - name: Package Windows
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}"
+          $commit = "${{ github.sha }}"
+          $date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+          ./release/package.ps1 -Platform windows-x64 -Version $version -Commit $commit -Date $date -DependencyDir deps -BuildInstaller
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tcforge-windows-x64
+          path: |
+            dist/tcforge-windows-x64.zip
+            dist/tcforge-windows-x64-setup.exe
+
+  package-macos-arm64:
+    needs: test
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install bundled tools
+        run: brew install ffmpeg ltc-tools
+      - name: Prepare dependency directory
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path deps | Out-Null
+          Copy-Item (Get-Command ffmpeg).Source deps/ffmpeg -Force
+          Copy-Item (Get-Command ffprobe).Source deps/ffprobe -Force
+          Copy-Item (Get-Command ltcdump).Source deps/ltcdump -Force
+      - name: Bundle macOS runtime libraries
+        run: bash release/macos-bundle-libs.sh deps
+      - name: Package macOS Apple Silicon
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}"
+          $commit = "${{ github.sha }}"
+          $date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+          ./release/package.ps1 -Platform macos-arm64 -Version $version -Commit $commit -Date $date -DependencyDir deps
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tcforge-macos-arm64
+          path: dist/tcforge-macos-arm64.tar.gz
+
+  publish:
+    needs:
+      - package-windows
+      - package-macos-arm64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          body: |
+            Unsigned tcforge release for Windows x64 and macOS Apple Silicon.
+
+            Windows users may see SmartScreen warnings because this first installer is unsigned.
+            macOS users may need to approve the downloaded binary in Privacy & Security because this first build is not notarized.

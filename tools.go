@@ -12,6 +12,7 @@ import (
 )
 
 var requiredTools = []string{"ffmpeg", "ffprobe", "ltcdump"}
+var executablePath = os.Executable
 
 type ToolStatus struct {
 	Name  string `json:"name"`
@@ -74,9 +75,6 @@ func runCommand(ctx context.Context, program string, args ...string) (string, st
 }
 
 func resolveTool(name string) (string, error) {
-	if path, err := exec.LookPath(name); err == nil {
-		return path, nil
-	}
 	for _, envName := range toolEnvNames(name) {
 		if override := os.Getenv(envName); override != "" {
 			if fileExists(override) {
@@ -84,6 +82,12 @@ func resolveTool(name string) (string, error) {
 			}
 			return "", fmt.Errorf("%s points to missing file: %s", envName, override)
 		}
+	}
+	if path, err := bundledToolPath(name); err == nil {
+		return path, nil
+	}
+	if path, err := exec.LookPath(name); err == nil {
+		return path, nil
 	}
 	if name == "ltcdump" {
 		if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
@@ -94,6 +98,28 @@ func resolveTool(name string) (string, error) {
 		}
 	}
 	return "", exec.ErrNotFound
+}
+
+func bundledToolPath(name string) (string, error) {
+	exe, err := executablePath()
+	if err != nil {
+		return "", err
+	}
+	toolsDir := filepath.Join(filepath.Dir(exe), "tools")
+	for _, candidateName := range toolExecutableNames(name) {
+		candidate := filepath.Join(toolsDir, candidateName)
+		if fileExists(candidate) {
+			return candidate, nil
+		}
+	}
+	return "", exec.ErrNotFound
+}
+
+func toolExecutableNames(name string) []string {
+	if strings.HasSuffix(strings.ToLower(name), ".exe") {
+		return []string{name}
+	}
+	return []string{name, name + ".exe"}
 }
 
 func toolEnvNames(name string) []string {
