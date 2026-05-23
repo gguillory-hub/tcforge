@@ -2,6 +2,7 @@
 set -euo pipefail
 
 libltc_version="1.3.2"
+libltc_sha256="0a6d42cd6c21e925a27fa560dc45ac80057d275f23342102825909c02d3b1249"
 ltc_tools_version="0.7.0"
 workdir="${1:-/tmp/tcforge-ltc-build}"
 
@@ -10,7 +11,7 @@ mkdir -p "$workdir"
 cd "$workdir"
 
 curl -L -o "libltc-${libltc_version}.tar.gz" "https://github.com/x42/libltc/releases/download/v${libltc_version}/libltc-${libltc_version}.tar.gz"
-echo "78ba31f784792b60be8ff407286f609f0c139b4fe885c714a9c4b580226fe0c8  libltc-${libltc_version}.tar.gz" | sha256sum -c -
+echo "${libltc_sha256}  libltc-${libltc_version}.tar.gz" | sha256sum -c -
 tar -xzf "libltc-${libltc_version}.tar.gz"
 
 pushd "libltc-${libltc_version}"
