@@ -77,47 +77,8 @@ jobs:
             dist/tcforge-windows-x64.zip
             dist/tcforge-windows-x64-setup.exe
 
-  package-macos-arm64:
-    needs: test
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - name: Install bundled tools
-        run: brew install ffmpeg ltc-tools
-      - name: Prepare dependency directory
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path deps | Out-Null
-          Copy-Item (Get-Command ffmpeg).Source deps/ffmpeg -Force
-          Copy-Item (Get-Command ffprobe).Source deps/ffprobe -Force
-          Copy-Item (Get-Command ltcdump).Source deps/ltcdump -Force
-      - name: Bundle macOS runtime libraries
-        run: bash release/macos-bundle-libs.sh deps
-      - name: Package macOS Apple Silicon
-        shell: pwsh
-        run: |
-          $version = "${{ github.ref_name }}"
-          $commit = "${{ github.sha }}"
-          $date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-          ./release/package.ps1 -Platform macos-arm64 -Version $version -Commit $commit -Date $date -DependencyDir deps
-      - name: Smoke test macOS package
-        run: |
-          dist/tcforge-macos-arm64/tcforge --version
-          dist/tcforge-macos-arm64/tools/ffprobe --version
-          dist/tcforge-macos-arm64/tools/ffmpeg -version
-          dist/tcforge-macos-arm64/tools/ltcdump -h >/dev/null || true
-      - uses: actions/upload-artifact@v4
-        with:
-          name: tcforge-macos-arm64
-          path: dist/tcforge-macos-arm64.tar.gz
-
   publish:
-    needs:
-      - package-windows
-      - package-macos-arm64
+    needs: package-windows
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -128,7 +89,8 @@ jobs:
         with:
           files: artifacts/*
           body: |
-            Unsigned tcforge release for Windows x64 and macOS Apple Silicon.
+            Unsigned tcforge release for Windows x64.
 
             Windows users may see SmartScreen warnings because this first installer is unsigned.
-            macOS users may need to approve the downloaded binary in Privacy & Security because this first build is not notarized.
+
+            macOS packaging is paused until it can be signed and notarized with an Apple Developer certificate.

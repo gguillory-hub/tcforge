@@ -62,15 +62,9 @@ Windows x64 releases include:
 - `tcforge-windows-x64.zip`: portable package
 - `tcforge-windows-x64-setup.exe`: unsigned installer that installs `tcforge` and adds it to your user `PATH`
 
-macOS Apple Silicon releases include:
+The first Windows release builds are unsigned, so Windows may show a SmartScreen warning.
 
-- `tcforge-macos-arm64.tar.gz`: portable package
-
-The first release builds are unsigned. Windows may show a SmartScreen warning, and macOS may require approval in Privacy & Security before running the downloaded binary. On macOS, clear quarantine for the whole extracted package so `tcforge`, `ffmpeg`, `ffprobe`, and `ltcdump` are all approved together:
-
-```bash
-xattr -dr com.apple.quarantine tcforge-macos-arm64
-```
+macOS packaging is paused until it can be signed and notarized with an Apple Developer certificate.
 
 ## Quick Start
 
