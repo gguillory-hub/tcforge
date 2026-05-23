@@ -49,13 +49,20 @@ jobs:
         run: |
           choco install innosetup -y --no-progress
       - name: Prepare dependency directory
-        shell: pwsh
+        shell: msys2 {0}
         run: |
-          New-Item -ItemType Directory -Force -Path deps | Out-Null
-          Copy-Item C:\msys64\mingw64\bin\ffmpeg.exe deps\ffmpeg.exe -Force
-          Copy-Item C:\msys64\mingw64\bin\ffprobe.exe deps\ffprobe.exe -Force
-          Copy-Item C:\msys64\mingw64\bin\ltcdump.exe deps\ltcdump.exe -Force
-          Copy-Item C:\msys64\mingw64\bin\*.dll deps\ -Force
+          set -euo pipefail
+          mkdir -p deps
+          for tool in ffmpeg ffprobe ltcdump; do
+            src="$(command -v "$tool" || command -v "$tool.exe")"
+            cp "$src" "deps/$tool.exe"
+          done
+          ldd deps/*.exe |
+            awk '/\/mingw64\/bin\// { if ($1 ~ /^\//) print $1; else print $3 }' |
+            sort -u |
+            while read -r dll; do
+              cp "$dll" deps/
+            done
       - name: Package Windows
         shell: pwsh
         run: |
