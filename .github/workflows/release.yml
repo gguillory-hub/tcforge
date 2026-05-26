@@ -63,12 +63,14 @@ jobs:
             while read -r dll; do
               cp "$dll" deps/
             done
+          echo "MINGW64_BIN=$(cygpath -w /mingw64/bin)" >> "$GITHUB_ENV"
+          echo "MINGW64_GCC=$(cygpath -w /mingw64/bin/gcc.exe)" >> "$GITHUB_ENV"
       - name: Build Windows GUI
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path prebuilt | Out-Null
-          $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
-          $env:CC = "C:\msys64\mingw64\bin\gcc.exe"
+          $env:PATH = "$env:MINGW64_BIN;$env:PATH"
+          $env:CC = "$env:MINGW64_GCC"
           $env:CGO_ENABLED = "1"
           $env:GOOS = "windows"
           $env:GOARCH = "amd64"
