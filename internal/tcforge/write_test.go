@@ -39,6 +39,7 @@ func TestBuildWriteCommand(t *testing.T) {
 			"-c", "copy",
 			"-timecode", "10:00:00:00",
 			"-metadata", "timecode=10:00:00:00",
+			"-metadata", "tcforge=1",
 			"-write_tmcd", "on",
 			"out.mov",
 		},
@@ -63,6 +64,7 @@ func TestBuildWriteCommandDropLTCAudio(t *testing.T) {
 		"-c", "copy",
 		"-timecode", "10:00:00:00",
 		"-metadata", "timecode=10:00:00:00",
+		"-metadata", "tcforge=1",
 		"-write_tmcd", "on",
 		"out.mov",
 	}
@@ -84,6 +86,7 @@ func TestBuildWriteCommandClean(t *testing.T) {
 		"-c", "copy",
 		"-timecode", "10:00:00:00",
 		"-metadata", "timecode=10:00:00:00",
+		"-metadata", "tcforge=1",
 		"-write_tmcd", "on",
 		"out.mov",
 	}

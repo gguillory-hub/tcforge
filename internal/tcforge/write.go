@@ -9,17 +9,18 @@ import (
 )
 
 type WriteOptions struct {
-	Input            string `json:"input"`
-	Output           string `json:"output"`
-	Channel          string `json:"channel"`
-	FPS              string `json:"fps"`
-	Clean            bool   `json:"clean"`
-	DropLTCAudio     bool   `json:"drop_ltc_audio"`
-	Overwrite        bool   `json:"overwrite"`
-	DryRun           bool   `json:"dry_run"`
-	AllowFPSMismatch bool   `json:"allow_fps_mismatch"`
-	JSON             bool   `json:"-"`
-	Verbose          bool   `json:"-"`
+	Input            string                                          `json:"input"`
+	Output           string                                          `json:"output"`
+	Channel          string                                          `json:"channel"`
+	FPS              string                                          `json:"fps"`
+	Clean            bool                                            `json:"clean"`
+	DropLTCAudio     bool                                            `json:"drop_ltc_audio"`
+	Overwrite        bool                                            `json:"overwrite"`
+	DryRun           bool                                            `json:"dry_run"`
+	AllowFPSMismatch bool                                            `json:"allow_fps_mismatch"`
+	JSON             bool                                            `json:"-"`
+	Verbose          bool                                            `json:"-"`
+	Progress         func(stage string, percent float64, exact bool) `json:"-"`
 }
 
 type WriteResult struct {
@@ -122,6 +123,7 @@ func writeOne(ctx context.Context, options WriteOptions) (WriteResult, error) {
 	if _, err := checkRequiredTools(); err != nil {
 		return fail(err)
 	}
+	emitProgress(options, "Reading media metadata", 0.05, false)
 	probe, err := ffprobe(ctx, options.Input)
 	if err != nil {
 		return fail(wrapProbeError(options.Input, err))
@@ -168,6 +170,7 @@ func writeOne(ctx context.Context, options WriteOptions) (WriteResult, error) {
 		return result, nil
 	}
 
+	emitProgress(options, "Decoding audio LTC", 0.2, false)
 	decode, err := decodeLTC(ctx, options.Input, tempDir, channel, panChannel, fps)
 	if err != nil {
 		return fail(err)
@@ -177,11 +180,21 @@ func writeOne(ctx context.Context, options WriteOptions) (WriteResult, error) {
 	result.DecodedStartTC = decode.Timecode
 	writeCmd := buildWriteCommand(options, decode.Timecode)
 	result.Commands = append(result.Commands, writeCmd)
-	if _, _, err := runCommand(ctx, writeCmd.Program, writeCmd.Args...); err != nil {
+	emitProgress(options, "Writing output file", 0, true)
+	if _, _, err := runCommandWithProgress(ctx, writeCmd.Program, writeCmd.Args, probe.Format.Duration, func(percent float64) {
+		emitProgress(options, "Writing output file", percent, true)
+	}); err != nil {
 		return fail(err)
 	}
+	emitProgress(options, "Done", 1, true)
 	result.Status = "ok"
 	return result, nil
+}
+
+func emitProgress(options WriteOptions, stage string, percent float64, exact bool) {
+	if options.Progress != nil {
+		options.Progress(stage, percent, exact)
+	}
 }
 
 type decodeResult struct {
@@ -308,6 +321,7 @@ func buildWriteCommand(options WriteOptions, timecode string) CommandSummary {
 		"-c", "copy",
 		"-timecode", timecode,
 		"-metadata", "timecode="+timecode,
+		"-metadata", "tcforge=1",
 		"-write_tmcd", "on",
 		options.Output,
 	)

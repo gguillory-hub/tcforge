@@ -2,7 +2,24 @@ package tcforge
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
+)
+
+const (
+	GUIStatusReady              = "Ready"
+	GUIStatusScanning           = "Scanning"
+	GUIStatusProcessing         = "Processing"
+	GUIStatusFixed              = "Fixed"
+	GUIStatusNeedsAttention     = "Needs Attention"
+	GUIStatusFailed             = "Failed"
+	GUIStatusAlreadyHasTimecode = "Already Has Timecode"
+	GUIStatusAlreadyProcessed   = "Already Processed"
+	GUIStatusNoAudioLTCFound    = "No Audio LTC Found"
 )
 
 type ClipProbe struct {
@@ -18,6 +35,26 @@ type ClipProbe struct {
 	Suggestion  string       `json:"suggestion,omitempty"`
 }
 
+type ClipScan struct {
+	ClipProbe
+	LTCScan       *LTCScanResult `json:"ltc_scan,omitempty"`
+	OutputExists  bool           `json:"output_exists"`
+	Overwrite     bool           `json:"overwrite"`
+	Warnings      []string       `json:"warnings,omitempty"`
+	Display       ClipDisplay    `json:"display"`
+	GUIStatus     string         `json:"gui_status"`
+	TechnicalLog  string         `json:"technical_log,omitempty"`
+	TCForgeTagged bool           `json:"tcforge_tagged"`
+}
+
+type ClipDisplay struct {
+	Video         string `json:"video,omitempty"`
+	Audio         string `json:"audio,omitempty"`
+	DetectedLTC   string `json:"detected_ltc,omitempty"`
+	StartTimecode string `json:"start_timecode,omitempty"`
+	Output        string `json:"output,omitempty"`
+}
+
 type GUIGlobalSettings struct {
 	EditEnabled      bool
 	Channel          string
@@ -27,6 +64,17 @@ type GUIGlobalSettings struct {
 	AllowFPSMismatch bool
 	OutputDir        string
 }
+
+type GUIProgressEvent struct {
+	Input   string
+	Stage   string
+	Current int
+	Total   int
+	Percent float64
+	Exact   bool
+}
+
+type GUIProgressFunc func(GUIProgressEvent)
 
 func ProbeClip(ctx context.Context, input, outputDir string) ClipProbe {
 	result := ClipProbe{Input: input, Output: DefaultOutput(input, outputDir), Status: "failed"}
@@ -58,6 +106,15 @@ func ProbeClip(ctx context.Context, input, outputDir string) ClipProbe {
 }
 
 func FixClip(ctx context.Context, input string, settings GUIGlobalSettings) (WriteResult, error) {
+	return FixClipWithProgress(ctx, input, settings, nil)
+}
+
+func FixClipWithProgress(ctx context.Context, input string, settings GUIGlobalSettings, progress GUIProgressFunc) (WriteResult, error) {
+	emit := func(stage string, percent float64, exact bool) {
+		if progress != nil {
+			progress(GUIProgressEvent{Input: input, Stage: stage, Percent: percent, Exact: exact})
+		}
+	}
 	fps := ""
 	channel := "auto"
 	preserve := false
@@ -69,6 +126,7 @@ func FixClip(ctx context.Context, input string, settings GUIGlobalSettings) (Wri
 		preserve = settings.Preserve
 	}
 	if fps == "" {
+		emit("Detecting video FPS", 0.05, false)
 		inferred, err := inferFixFPS(ctx, input)
 		if err != nil {
 			return failedWriteResult(input, DefaultOutput(input, settings.OutputDir), channel, err), err
@@ -83,8 +141,80 @@ func FixClip(ctx context.Context, input string, settings GUIGlobalSettings) (Wri
 		Clean:            !preserve,
 		Overwrite:        settings.EditEnabled && settings.Overwrite,
 		AllowFPSMismatch: settings.EditEnabled && settings.AllowFPSMismatch,
+		Progress: func(stage string, percent float64, exact bool) {
+			emit(stage, percent, exact)
+		},
 	}
 	return writeOne(ctx, options)
+}
+
+func ScanClip(ctx context.Context, input string, settings GUIGlobalSettings) ClipScan {
+	probe := ProbeClip(ctx, input, settings.OutputDir)
+	scan := ClipScan{
+		ClipProbe:    probe,
+		OutputExists: fileExists(probe.Output),
+		Overwrite:    settings.EditEnabled && settings.Overwrite,
+		GUIStatus:    GUIStatusReady,
+	}
+	if probe.Status != "ok" {
+		scan.GUIStatus = classifyGUIError(probe.ErrorCode)
+		scan.Display = clipDisplay(scan)
+		scan.TechnicalLog = scanTechnicalLog(scan)
+		return scan
+	}
+
+	scan.TCForgeTagged = hasTCForgeMetadata(probe.Probe)
+	if scan.TCForgeTagged {
+		scan.GUIStatus = GUIStatusAlreadyProcessed
+		scan.Warnings = append(scan.Warnings, "Already Processed. This file already appears to contain TCForge timecode metadata.")
+		scan.Display = clipDisplay(scan)
+		scan.TechnicalLog = scanTechnicalLog(scan)
+		return scan
+	}
+	if len(probe.Summary.ExistingTimecodes) > 0 {
+		scan.GUIStatus = GUIStatusAlreadyHasTimecode
+		scan.Warnings = append(scan.Warnings, "This file already has timecode metadata.")
+	}
+	if scan.OutputExists && !scan.Overwrite {
+		scan.Warnings = append(scan.Warnings, fmt.Sprintf("Output already exists and overwrite is off: %s", probe.Output))
+		if scan.GUIStatus == GUIStatusReady {
+			scan.GUIStatus = GUIStatusNeedsAttention
+		}
+	}
+
+	fps := scanFPS(probe, settings)
+	if fps == "" {
+		scan.Warnings = append(scan.Warnings, "Could not infer video FPS for LTC scan.")
+		if scan.GUIStatus == GUIStatusReady {
+			scan.GUIStatus = GUIStatusNeedsAttention
+		}
+		scan.Display = clipDisplay(scan)
+		scan.TechnicalLog = scanTechnicalLog(scan)
+		return scan
+	}
+	ltc, err := scanLTCChannels(ctx, input, fps)
+	if err != nil {
+		code, suggestion := appErrorFields(err)
+		scan.ErrorCode = code
+		scan.Error = appErrorSummary(err)
+		scan.Suggestion = suggestion
+		scan.GUIStatus = classifyGUIError(code)
+		scan.Display = clipDisplay(scan)
+		scan.TechnicalLog = scanTechnicalLog(scan)
+		return scan
+	}
+	scan.LTCScan = &ltc
+	if ltc.SelectedChannel == "" {
+		if scan.GUIStatus == GUIStatusReady {
+			scan.GUIStatus = GUIStatusNoAudioLTCFound
+		}
+		scan.Warnings = append(scan.Warnings, "No audio LTC found on left or right channel.")
+	} else if scan.GUIStatus == "" {
+		scan.GUIStatus = GUIStatusReady
+	}
+	scan.Display = clipDisplay(scan)
+	scan.TechnicalLog = scanTechnicalLog(scan)
+	return scan
 }
 
 func DefaultOutput(input, outputDir string) string {
@@ -110,4 +240,186 @@ func inferredVideoFPS(probe ProbeInfo) string {
 
 func DisplayName(path string) string {
 	return filepath.Base(path)
+}
+
+func ClassifyWriteResult(result WriteResult, err error) string {
+	if err == nil && result.Status == "ok" {
+		return GUIStatusFixed
+	}
+	return classifyGUIError(result.ErrorCode)
+}
+
+func HumanSummary(scan ClipScan) ClipDisplay {
+	return clipDisplay(scan)
+}
+
+func scanFPS(probe ClipProbe, settings GUIGlobalSettings) string {
+	if settings.EditEnabled && settings.FPS != "" && settings.FPS != "auto" {
+		return settings.FPS
+	}
+	return probe.InferredFPS
+}
+
+func classifyGUIError(code string) string {
+	switch code {
+	case "ltc_not_found":
+		return GUIStatusNoAudioLTCFound
+	case "output_exists", "fps_mismatch", "audio_channel_missing":
+		return GUIStatusNeedsAttention
+	case "":
+		return GUIStatusFailed
+	default:
+		return GUIStatusFailed
+	}
+}
+
+func hasTCForgeMetadata(probe ProbeInfo) bool {
+	if hasTCForgeTag(probe.Format.Tags) {
+		return true
+	}
+	for _, stream := range probe.Streams {
+		if hasTCForgeTag(stream.Tags) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasTCForgeTag(tags map[string]string) bool {
+	for key, value := range tags {
+		k := strings.ToLower(strings.TrimSpace(key))
+		v := strings.ToLower(strings.TrimSpace(value))
+		if k == "tcforge" && v != "" {
+			return true
+		}
+		if strings.Contains(v, "tcforge") {
+			return true
+		}
+	}
+	return false
+}
+
+func clipDisplay(scan ClipScan) ClipDisplay {
+	display := ClipDisplay{Output: filepath.Base(scan.Output)}
+	if len(scan.Summary.Video) > 0 {
+		v := scan.Summary.Video[0]
+		res := friendlyResolution(v.Resolution)
+		codec := friendlyCodec(v.Codec)
+		fps := scan.InferredFPS
+		if fps == "" {
+			fps = canonicalFPS(v.FPS)
+		}
+		display.Video = strings.Join(nonEmptyStrings(res, fpsLabel(fps), codec), ", ")
+	}
+	if len(scan.Summary.Audio) > 0 {
+		a := scan.Summary.Audio[0]
+		display.Audio = strings.Join(nonEmptyStrings(channelLabel(a.Channels), sampleRateLabel(a.SampleRate)), ", ")
+	}
+	if scan.LTCScan != nil && scan.LTCScan.SelectedChannel != "" {
+		display.DetectedLTC = titleWord(scan.LTCScan.SelectedChannel) + " channel"
+		display.StartTimecode = scan.LTCScan.SelectedTimecode
+	} else if len(scan.Summary.ExistingTimecodes) > 0 {
+		display.StartTimecode = scan.Summary.ExistingTimecodes[0].Value
+	}
+	return display
+}
+
+func scanTechnicalLog(scan ClipScan) string {
+	var parts []string
+	if b, err := json.MarshalIndent(scan.Summary, "", "  "); err == nil {
+		parts = append(parts, "Probe summary:\n"+string(b))
+	}
+	if scan.LTCScan != nil {
+		if b, err := json.MarshalIndent(scan.LTCScan, "", "  "); err == nil {
+			parts = append(parts, "LTC scan:\n"+string(b))
+		}
+	}
+	parts = append(parts, nonEmptyStrings("Status: "+scan.GUIStatus, "Output: "+scan.Output, strings.Join(scan.Warnings, "\n"))...)
+	if scan.Error != "" {
+		parts = append(parts, "Error: "+scan.Error)
+	}
+	if scan.Suggestion != "" {
+		parts = append(parts, "Suggestion: "+scan.Suggestion)
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+func friendlyResolution(res string) string {
+	switch res {
+	case "3840x2160", "4096x2160":
+		return "4K UHD"
+	case "1920x1080":
+		return "1080p"
+	case "1280x720":
+		return "720p"
+	default:
+		return res
+	}
+}
+
+func friendlyCodec(codec string) string {
+	switch strings.ToLower(codec) {
+	case "h264":
+		return "H.264"
+	case "hevc", "h265":
+		return "H.265"
+	case "prores":
+		return "ProRes"
+	default:
+		return codec
+	}
+}
+
+func fpsLabel(fps string) string {
+	if fps == "" {
+		return ""
+	}
+	return fps + " fps"
+}
+
+func channelLabel(channels int) string {
+	if channels <= 0 {
+		return ""
+	}
+	if channels == 1 {
+		return "1 channel"
+	}
+	return fmt.Sprintf("%d channels", channels)
+}
+
+func sampleRateLabel(sampleRate string) string {
+	if sampleRate == "" {
+		return ""
+	}
+	value, err := strconv.Atoi(sampleRate)
+	if err != nil {
+		return sampleRate + " Hz"
+	}
+	if value%1000 == 0 {
+		return fmt.Sprintf("%d kHz", value/1000)
+	}
+	return sampleRate + " Hz"
+}
+
+func titleWord(value string) string {
+	if value == "" {
+		return ""
+	}
+	return strings.ToUpper(value[:1]) + strings.ToLower(value[1:])
+}
+
+func nonEmptyStrings(values ...string) []string {
+	var out []string
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			out = append(out, value)
+		}
+	}
+	return out
+}
+
+func OutputExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }

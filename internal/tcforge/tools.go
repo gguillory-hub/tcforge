@@ -1,12 +1,15 @@
 package tcforge
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -72,6 +75,87 @@ func runCommand(ctx context.Context, program string, args ...string) (string, st
 		return stdout.String(), stderr.String(), appError("external_tool_failed", summary, "Run again with --verbose and check the external command output above.", err)
 	}
 	return stdout.String(), stderr.String(), nil
+}
+
+func runCommandWithProgress(ctx context.Context, program string, args []string, duration string, progress func(float64)) (string, string, error) {
+	if program != "ffmpeg" || progress == nil || duration == "" {
+		return runCommand(ctx, program, args...)
+	}
+	seconds, err := strconv.ParseFloat(duration, 64)
+	if err != nil || seconds <= 0 {
+		return runCommand(ctx, program, args...)
+	}
+
+	progressArgs := append([]string{}, args...)
+	progressArgs = append([]string{"-progress", "pipe:1", "-nostats"}, progressArgs...)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+
+	resolvedProgram := program
+	if resolved, err := resolveTool(program); err == nil {
+		resolvedProgram = resolved
+	}
+	cmd := exec.CommandContext(ctx, resolvedProgram, progressArgs...)
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", "", err
+	}
+	var stdout, stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		return "", stderr.String(), err
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		readFFmpegProgress(stdoutPipe, &stdout, seconds, progress)
+	}()
+	err = cmd.Wait()
+	<-done
+	if ctx.Err() != nil {
+		return stdout.String(), stderr.String(), appError("command_timeout", fmt.Sprintf("%s timed out.", program), "Try a shorter clip or confirm the external tool is not waiting for input.", ctx.Err())
+	}
+	if err != nil {
+		detail := strings.TrimSpace(stderr.String())
+		summary := fmt.Sprintf("%s failed.", program)
+		if detail != "" {
+			summary += "\n" + detail
+		}
+		return stdout.String(), stderr.String(), appError("external_tool_failed", summary, "Run again with --verbose and check the external command output above.", err)
+	}
+	progress(1)
+	return stdout.String(), stderr.String(), nil
+}
+
+func readFFmpegProgress(reader io.Reader, stdout *bytes.Buffer, durationSeconds float64, progress func(float64)) {
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		line := scanner.Text()
+		stdout.WriteString(line + "\n")
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		switch key {
+		case "out_time_ms":
+			ms, err := strconv.ParseFloat(value, 64)
+			if err == nil && durationSeconds > 0 {
+				percent := (ms / 1000000) / durationSeconds
+				if percent < 0 {
+					percent = 0
+				}
+				if percent > 1 {
+					percent = 1
+				}
+				progress(percent)
+			}
+		case "progress":
+			if value == "end" {
+				progress(1)
+			}
+		}
+	}
 }
 
 func resolveTool(name string) (string, error) {
