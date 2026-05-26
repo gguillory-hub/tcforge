@@ -12,10 +12,10 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/storage"
+	fynedialog "fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	nativedialog "github.com/sqweek/dialog"
 
 	"github.com/gguillory-hub/tcforge/internal/tcforge"
 )
@@ -32,6 +32,7 @@ type clipRow struct {
 }
 
 type guiState struct {
+	app            fyne.App
 	mu             sync.Mutex
 	rows           []*clipRow
 	rowBoxes       *fyne.Container
@@ -43,6 +44,7 @@ type guiState struct {
 	preserve       bool
 	overwrite      bool
 	allowMismatch  bool
+	themeChoice    string
 	processButton  *widget.Button
 	outputEntry    *widget.Entry
 	advancedFields []fyne.Disableable
@@ -54,12 +56,15 @@ func main() {
 	w.Resize(fyne.NewSize(1180, 760))
 
 	state := &guiState{
+		app:         a,
 		window:      w,
 		channel:     "auto",
 		fps:         "auto",
+		themeChoice: a.Preferences().StringWithFallback("theme", "system"),
 		rowBoxes:    container.NewVBox(),
 		outputEntry: widget.NewEntry(),
 	}
+	state.applyTheme(state.themeChoice)
 	state.outputEntry.SetPlaceHolder("Same folder as each source clip")
 	state.outputEntry.Disable()
 
@@ -70,30 +75,28 @@ func main() {
 
 func (s *guiState) buildUI() fyne.CanvasObject {
 	addFile := widget.NewButtonWithIcon("Add File", theme.FileIcon(), func() {
-		fd := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
-			if err != nil || reader == nil {
-				return
-			}
-			path := reader.URI().Path()
-			_ = reader.Close()
-			s.addPaths([]string{path})
-		}, s.window)
-		fd.SetFilter(storage.NewExtensionFileFilter([]string{".mp4", ".mov", ".m4v", ".mxf", ".MP4", ".MOV", ".M4V", ".MXF"}))
-		fd.Show()
+		path, err := nativedialog.File().Title("Add Media File").Filter("Media files", "mp4", "mov", "m4v", "mxf").Load()
+		if err != nil {
+			s.handleNativeDialogError(err)
+			return
+		}
+		s.addPaths([]string{path})
 	})
 	addFolder := widget.NewButtonWithIcon("Add Folder", theme.FolderOpenIcon(), func() {
-		fd := dialog.NewFolderOpen(func(list fyne.ListableURI, err error) {
-			if err != nil || list == nil {
-				return
-			}
-			files, err := tcforge.ListMediaFiles(list.Path())
-			if err != nil {
-				dialog.ShowError(err, s.window)
-				return
-			}
-			s.addPaths(files)
-		}, s.window)
-		fd.Show()
+		path, err := nativedialog.Directory().Title("Add Media Folder").Browse()
+		if err != nil {
+			s.handleNativeDialogError(err)
+			return
+		}
+		files, err := tcforge.ListMediaFiles(path)
+		if err != nil {
+			fynedialog.ShowError(err, s.window)
+			return
+		}
+		s.addPaths(files)
+	})
+	settings := widget.NewButtonWithIcon("Settings", theme.SettingsIcon(), func() {
+		s.showSettings()
 	})
 	selectAll := widget.NewButton("Select All", func() {
 		s.setAllSelected(true)
@@ -106,13 +109,12 @@ func (s *guiState) buildUI() fyne.CanvasObject {
 	})
 
 	outputChoose := widget.NewButtonWithIcon("Output Folder", theme.FolderOpenIcon(), func() {
-		fd := dialog.NewFolderOpen(func(list fyne.ListableURI, err error) {
-			if err != nil || list == nil {
-				return
-			}
-			s.setOutputDir(list.Path())
-		}, s.window)
-		fd.Show()
+		path, err := nativedialog.Directory().Title("Choose Output Folder").Browse()
+		if err != nil {
+			s.handleNativeDialogError(err)
+			return
+		}
+		s.setOutputDir(path)
 	})
 	outputClear := widget.NewButtonWithIcon("", theme.ContentClearIcon(), func() {
 		s.setOutputDir("")
@@ -145,7 +147,7 @@ func (s *guiState) buildUI() fyne.CanvasObject {
 	s.updateAdvancedEnabled()
 	advanced := container.NewHBox(edit, widget.NewLabel("Channel"), channel, widget.NewLabel("FPS"), fps, preserve, overwrite, allowMismatch)
 
-	toolbar := container.NewHBox(addFile, addFolder, selectAll, selectNone, s.processButton)
+	toolbar := container.NewHBox(addFile, addFolder, selectAll, selectNone, s.processButton, settings)
 	header := container.NewVBox(toolbar, outputRow, advanced, widget.NewSeparator())
 	list := container.NewVScroll(s.rowBoxes)
 	return container.NewBorder(header, nil, nil, nil, list)
@@ -201,7 +203,7 @@ func (s *guiState) probe(row *clipRow) {
 func (s *guiState) processSelected() {
 	selected := s.selectedRows()
 	if len(selected) == 0 {
-		dialog.ShowInformation("No clips selected", "Select one or more clips to fix.", s.window)
+		fynedialog.ShowInformation("No clips selected", "Select one or more clips to fix.", s.window)
 		return
 	}
 	s.processButton.Disable()
@@ -229,6 +231,42 @@ func (s *guiState) processSelected() {
 			s.processButton.Enable()
 		})
 	}()
+}
+
+func (s *guiState) showSettings() {
+	themeSelect := widget.NewSelect([]string{"system", "light", "dark"}, func(value string) {
+		if value == "" {
+			return
+		}
+		s.applyTheme(value)
+	})
+	themeSelect.SetSelected(s.themeChoice)
+	content := container.NewVBox(
+		widget.NewLabelWithStyle("Settings", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		container.NewBorder(nil, nil, widget.NewLabel("Theme"), nil, themeSelect),
+	)
+	fynedialog.ShowCustom("Settings", "Close", content, s.window)
+}
+
+func (s *guiState) applyTheme(choice string) {
+	s.themeChoice = choice
+	s.app.Preferences().SetString("theme", choice)
+	switch choice {
+	case "light":
+		s.app.Settings().SetTheme(theme.LightTheme())
+	case "dark":
+		s.app.Settings().SetTheme(theme.DarkTheme())
+	default:
+		s.themeChoice = "system"
+		s.app.Settings().SetTheme(theme.DefaultTheme())
+	}
+}
+
+func (s *guiState) handleNativeDialogError(err error) {
+	if err == nil || err == nativedialog.ErrCancelled {
+		return
+	}
+	fynedialog.ShowError(err, s.window)
 }
 
 func (s *guiState) selectedRows() []*clipRow {
