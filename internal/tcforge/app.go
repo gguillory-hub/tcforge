@@ -1,4 +1,4 @@
-package main
+package tcforge
 
 import (
 	"encoding/json"
@@ -14,14 +14,7 @@ var (
 	date    = ""
 )
 
-func main() {
-	if err := run(os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
-	}
-}
-
-func run(args []string) error {
+func Run(args []string) error {
 	if len(args) == 0 {
 		printUsage()
 		return nil
@@ -42,7 +35,7 @@ func run(args []string) error {
 		printUsage()
 		return nil
 	case "--version", "version":
-		fmt.Println(versionString())
+		fmt.Println(VersionString())
 		return nil
 	default:
 		if !strings.HasPrefix(args[0], "-") {
@@ -71,7 +64,7 @@ Packaged releases also look for bundled tools in:
   tools\ beside the tcforge executable`)
 }
 
-func versionString() string {
+func VersionString() string {
 	parts := []string{"tcforge", version}
 	if commit != "" {
 		parts = append(parts, "commit="+commit)
@@ -80,6 +73,10 @@ func versionString() string {
 		parts = append(parts, "built="+date)
 	}
 	return strings.Join(parts, " ")
+}
+
+func versionString() string {
+	return VersionString()
 }
 
 func printJSON(v any) error {

@@ -1,8 +1,9 @@
 .DS_Store
 Thumbs.db
 
-tcforge.exe
-tcforge
+/tcforge.exe
+/tcforge
+/tcforge-gui.exe
 
 *.tmp
 *.wav

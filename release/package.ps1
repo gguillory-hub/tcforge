@@ -7,6 +7,7 @@ param(
     [string] $Commit = "",
     [string] $Date = "",
     [string] $DependencyDir = "",
+    [string] $GUIBinary = "",
     [string] $OutputRoot = "dist",
     [switch] $BuildInstaller
 )
@@ -141,20 +142,41 @@ $env:GOOS = $goos
 $env:GOARCH = $goarch
 $env:CGO_ENABLED = "0"
 
-$ldflags = @("-X", "main.version=$Version")
+$versionPackage = "github.com/gguillory-hub/tcforge/internal/tcforge"
+$ldflags = @("-X", "$versionPackage.version=$Version")
 if ($Commit -ne "") {
-    $ldflags += @("-X", "main.commit=$Commit")
+    $ldflags += @("-X", "$versionPackage.commit=$Commit")
 }
 if ($Date -ne "") {
-    $ldflags += @("-X", "main.date=$Date")
+    $ldflags += @("-X", "$versionPackage.date=$Date")
 }
 
 Push-Location $repo
 try {
-    go build -trimpath -ldflags ($ldflags -join " ") -o (Join-Path $stage $binaryName) .
+    go build -trimpath -ldflags ($ldflags -join " ") -o (Join-Path $stage $binaryName) ./cmd/tcforge
 }
 finally {
     Pop-Location
+}
+
+if ($Platform -eq "windows-x64") {
+	$guiDestination = Join-Path $stage "tcforge-gui.exe"
+	if ($GUIBinary -ne "") {
+		if (-not (Test-Path -LiteralPath $GUIBinary)) {
+			throw "GUI binary does not exist: $GUIBinary"
+		}
+		Copy-Item -LiteralPath $GUIBinary -Destination $guiDestination -Force
+	}
+	else {
+		Push-Location $repo
+		try {
+			$env:CGO_ENABLED = "1"
+			go build -tags gui -trimpath -ldflags ($ldflags -join " ") -o $guiDestination ./cmd/tcforge-gui
+		}
+		finally {
+			Pop-Location
+		}
+	}
 }
 
 Copy-Tool -Name "ffmpeg" -FromDir $DependencyDir -ToDir $tools
@@ -170,14 +192,9 @@ tcforge $Version
 
 This portable package includes tcforge and bundled external tools in tools/.
 
-Windows: run tcforge.exe from PowerShell or install with the unsigned installer.
-macOS Apple Silicon: run ./tcforge from Terminal. Because this build is unsigned, macOS may quarantine tcforge and the bundled tools. From the folder containing the extracted package, run:
+Windows: run tcforge-gui.exe for the desktop app, or use tcforge.exe from PowerShell for the CLI. The unsigned installer adds the CLI to PATH and creates a GUI Start Menu shortcut.
 
-  xattr -dr com.apple.quarantine tcforge-macos-arm64
-
-Then run:
-
-  ./tcforge --version
+macOS packaging is paused until tcforge can be signed and notarized with an Apple Developer certificate.
 
 No Go installation is required.
 "@

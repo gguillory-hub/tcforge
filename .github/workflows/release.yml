@@ -63,13 +63,25 @@ jobs:
             while read -r dll; do
               cp "$dll" deps/
             done
+      - name: Build Windows GUI
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          mkdir -p prebuilt
+          version="${GITHUB_REF_NAME}"
+          commit="${GITHUB_SHA}"
+          date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          pkg="github.com/gguillory-hub/tcforge/internal/tcforge"
+          CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -tags gui -trimpath \
+            -ldflags "-X ${pkg}.version=${version} -X ${pkg}.commit=${commit} -X ${pkg}.date=${date}" \
+            -o prebuilt/tcforge-gui.exe ./cmd/tcforge-gui
       - name: Package Windows
         shell: pwsh
         run: |
           $version = "${{ github.ref_name }}"
           $commit = "${{ github.sha }}"
           $date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-          ./release/package.ps1 -Platform windows-x64 -Version $version -Commit $commit -Date $date -DependencyDir deps -BuildInstaller
+          ./release/package.ps1 -Platform windows-x64 -Version $version -Commit $commit -Date $date -DependencyDir deps -GUIBinary prebuilt\tcforge-gui.exe -BuildInstaller
       - uses: actions/upload-artifact@v4
         with:
           name: tcforge-windows-x64

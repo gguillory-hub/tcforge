@@ -24,13 +24,14 @@ SolidCompression=yes
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
 PrivilegesRequired=lowest
-UninstallDisplayIcon={app}\tcforge.exe
+UninstallDisplayIcon={app}\tcforge-gui.exe
 WizardStyle=modern
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
+Name: "{group}\tcforge"; Filename: "{app}\tcforge-gui.exe"
 Name: "{group}\tcforge PowerShell"; Filename: "powershell.exe"; Parameters: "-NoExit -Command ""Set-Location '{app}'; .\tcforge.exe --version"""
 
 [Registry]

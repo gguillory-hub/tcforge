@@ -60,11 +60,13 @@ $env:TCFORGE_LTCDUMP = "C:\Users\you\tools\ltcdump\ltcdump.exe"
 Windows x64 releases include:
 
 - `tcforge-windows-x64.zip`: portable package
-- `tcforge-windows-x64-setup.exe`: unsigned installer that installs `tcforge` and adds it to your user `PATH`
+- `tcforge-windows-x64-setup.exe`: unsigned installer that installs the GUI and CLI, adds `tcforge` to your user `PATH`, and creates a Start Menu shortcut
 
 The first Windows release builds are unsigned, so Windows may show a SmartScreen warning.
 
 macOS packaging is paused until it can be signed and notarized with an Apple Developer certificate.
+
+The desktop GUI is available as `tcforge-gui.exe`. The CLI remains available as `tcforge.exe`.
 
 ## Quick Start
 
