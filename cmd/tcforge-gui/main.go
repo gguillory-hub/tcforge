@@ -187,8 +187,9 @@ func (s *guiState) buildUI() fyne.CanvasObject {
 	header := container.NewVBox(toolbar, outputRow, advanced, progress, widget.NewSeparator())
 	list := container.NewVScroll(s.rowBoxes)
 	right := container.NewVScroll(s.detailPanel)
-	right.SetMinSize(fyne.NewSize(360, 0))
-	body := container.NewBorder(nil, nil, nil, right, list)
+	right.SetMinSize(fyne.NewSize(420, 0))
+	body := container.NewHSplit(list, right)
+	body.SetOffset(0.72)
 	return container.NewBorder(header, nil, nil, nil, body)
 }
 
@@ -359,6 +360,8 @@ func (s *guiState) applyTheme(choice string) {
 		s.themeChoice = themeChoiceProfessionalDark
 		s.app.Settings().SetTheme(newProfessionalDarkTheme())
 	}
+	s.refreshRows()
+	s.refreshDetails()
 }
 
 func (s *guiState) handleNativeDialogError(err error) {
@@ -539,10 +542,6 @@ func (s *guiState) rowWidget(row *clipRow) fyne.CanvasObject {
 	if row.Stage != "" {
 		lines = append(lines, labelLine("Progress", row.Stage))
 	}
-	message := rowMessage(row)
-	if message != "" {
-		lines = append(lines, message)
-	}
 	summary := widget.NewLabel(strings.Join(nonEmpty(lines...), "\n"))
 	summary.Wrapping = fyne.TextWrapWord
 
@@ -563,8 +562,13 @@ func (s *guiState) rowWidget(row *clipRow) fyne.CanvasObject {
 	openOutput.Importance = widget.LowImportance
 
 	header := container.NewBorder(nil, nil, container.NewHBox(check, statusIcon, statusText), container.NewHBox(showDetails, openOutput), name)
-	content := container.NewVBox(header, timecode, summary, path)
-	bg := canvas.NewRectangle(statusTint(row.Status))
+	objects := []fyne.CanvasObject{header, timecode, summary}
+	if notice := s.rowNotice(row); notice != nil {
+		objects = append(objects, notice)
+	}
+	objects = append(objects, path)
+	content := container.NewVBox(objects...)
+	bg := canvas.NewRectangle(s.statusTint(row.Status))
 	return container.NewVBox(container.NewStack(bg, container.NewPadded(content)))
 }
 
@@ -583,7 +587,7 @@ func (s *guiState) refreshDetails() {
 		file := widget.NewLabelWithStyle(tcforge.DisplayName(row.Path), fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 		file.SizeName = theme.SizeNameSubHeadingText
 		s.detailPanel.Add(file)
-		s.detailPanel.Add(statusPill(row.Status))
+		s.detailPanel.Add(s.statusPill(row.Status))
 		s.detailPanel.Add(sectionText("Detected media", strings.Join(nonEmpty(
 			labelLine("Video", row.Scan.Display.Video),
 			labelLine("Audio", row.Scan.Display.Audio),
@@ -593,7 +597,10 @@ func (s *guiState) refreshDetails() {
 			labelLine("Start", row.Scan.Display.StartTimecode),
 		), "\n")))
 		s.detailPanel.Add(sectionText("Output plan", row.Scan.Output))
-		s.detailPanel.Add(sectionText("Warnings", strings.Join(row.Scan.Warnings, "\n")))
+		s.detailPanel.Add(s.warningMessages(row.Scan.Warnings))
+		if row.Error != "" || row.Suggestion != "" {
+			s.detailPanel.Add(s.errorMessage(strings.Join(nonEmpty(row.Error, row.Suggestion), "\n")))
+		}
 		s.detailPanel.Add(technicalDetails(strings.Join(nonEmpty(row.Scan.TechnicalLog, commandLog(row.Result), row.Error, row.Suggestion), "\n\n")))
 		s.detailPanel.Refresh()
 	})
@@ -604,7 +611,8 @@ func (s *guiState) showDetails(row *clipRow) {
 		sectionText("Detected media", strings.Join(nonEmpty(labelLine("Video", row.Scan.Display.Video), labelLine("Audio", row.Scan.Display.Audio)), "\n")),
 		sectionText("Detected LTC", strings.Join(nonEmpty(labelLine("Channel", row.Scan.Display.DetectedLTC), labelLine("Start", row.Scan.Display.StartTimecode)), "\n")),
 		sectionText("Output plan", row.Scan.Output),
-		sectionText("Warnings", strings.Join(row.Scan.Warnings, "\n")),
+		s.warningMessages(row.Scan.Warnings),
+		s.errorMessage(strings.Join(nonEmpty(row.Error, row.Suggestion), "\n")),
 		technicalDetails(strings.Join(nonEmpty(row.Scan.TechnicalLog, commandLog(row.Result), row.Error, row.Suggestion), "\n\n")),
 	))
 	content.SetMinSize(fyne.NewSize(760, 520))
@@ -627,6 +635,79 @@ func warningBanner(text string) *fyne.Container {
 	return container.NewStack(bg, container.NewPadded(label))
 }
 
+func (s *guiState) rowNotice(row *clipRow) fyne.CanvasObject {
+	message := rowMessage(row)
+	if message == "" {
+		return nil
+	}
+	switch tcforge.GUIStatusTone(row.Status) {
+	case tcforge.GUIStatusToneError:
+		return s.messageBox("Error", message, tcforge.GUIStatusToneError)
+	case tcforge.GUIStatusToneWarning:
+		return s.messageBox("Warning", message, tcforge.GUIStatusToneWarning)
+	default:
+		if row.Status == tcforge.GUIStatusAlreadyProcessed {
+			return s.messageBox("Notice", message, tcforge.GUIStatusToneActive)
+		}
+		return s.messageBox("Notice", message, tcforge.GUIStatusToneNeutral)
+	}
+}
+
+func (s *guiState) warningMessages(messages []string) fyne.CanvasObject {
+	if len(nonEmpty(messages...)) == 0 {
+		return sectionText("Warnings", "")
+	}
+	return s.messageBox("Warnings", strings.Join(nonEmpty(messages...), "\n"), tcforge.GUIStatusToneWarning)
+}
+
+func (s *guiState) errorMessage(message string) fyne.CanvasObject {
+	if strings.TrimSpace(message) == "" {
+		return sectionText("Errors", "")
+	}
+	return s.messageBox("Errors", message, tcforge.GUIStatusToneError)
+}
+
+func (s *guiState) messageBox(title, body, tone string) fyne.CanvasObject {
+	bg := canvas.NewRectangle(s.messageColor(tone))
+	titleLabel := widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	bodyLabel := widget.NewLabel(body)
+	bodyLabel.Wrapping = fyne.TextWrapWord
+	icon := widget.NewIcon(messageIcon(tone))
+	return container.NewStack(bg, container.NewPadded(container.NewBorder(nil, nil, icon, nil, container.NewVBox(titleLabel, bodyLabel))))
+}
+
+func (s *guiState) messageColor(tone string) color.Color {
+	if s.lightMode() {
+		switch tone {
+		case tcforge.GUIStatusToneError:
+			return color.NRGBA{R: 0xfa, G: 0xdb, B: 0xdb, A: 0xff}
+		case tcforge.GUIStatusToneWarning:
+			return color.NRGBA{R: 0xff, G: 0xee, B: 0xc2, A: 0xff}
+		default:
+			return color.NRGBA{R: 0xe4, G: 0xf0, B: 0xff, A: 0xff}
+		}
+	}
+	switch tone {
+	case tcforge.GUIStatusToneError:
+		return color.NRGBA{R: 0x45, G: 0x25, B: 0x28, A: 0xff}
+	case tcforge.GUIStatusToneWarning:
+		return color.NRGBA{R: 0x4a, G: 0x3b, B: 0x20, A: 0xff}
+	default:
+		return color.NRGBA{R: 0x24, G: 0x30, B: 0x3d, A: 0xff}
+	}
+}
+
+func messageIcon(tone string) fyne.Resource {
+	switch tone {
+	case tcforge.GUIStatusToneError:
+		return theme.ErrorIcon()
+	case tcforge.GUIStatusToneWarning:
+		return theme.WarningIcon()
+	default:
+		return theme.InfoIcon()
+	}
+}
+
 func emptyListState() fyne.CanvasObject {
 	title := widget.NewLabelWithStyle("Add media files to begin", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
 	title.SizeName = theme.SizeNameSubHeadingText
@@ -637,13 +718,30 @@ func emptyListState() fyne.CanvasObject {
 	return container.NewCenter(container.NewPadded(container.NewVBox(title, body)))
 }
 
-func statusPill(status string) fyne.CanvasObject {
-	bg := canvas.NewRectangle(statusTint(status))
+func (s *guiState) statusPill(status string) fyne.CanvasObject {
+	bg := canvas.NewRectangle(s.statusTint(status))
 	label := widget.NewLabelWithStyle(status, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	return container.NewStack(bg, container.NewPadded(container.NewHBox(widget.NewIcon(statusResource(status)), label)))
 }
 
-func statusTint(status string) color.Color {
+func (s *guiState) statusTint(status string) color.Color {
+	if s.lightMode() {
+		switch tcforge.GUIStatusTone(status) {
+		case tcforge.GUIStatusToneSuccess:
+			return color.NRGBA{R: 0xe6, G: 0xf4, B: 0xec, A: 0xff}
+		case tcforge.GUIStatusToneWarning:
+			return color.NRGBA{R: 0xff, G: 0xf3, B: 0xd6, A: 0xff}
+		case tcforge.GUIStatusToneError:
+			return color.NRGBA{R: 0xfa, G: 0xe3, B: 0xe3, A: 0xff}
+		case tcforge.GUIStatusToneActive:
+			return color.NRGBA{R: 0xe4, G: 0xf0, B: 0xff, A: 0xff}
+		default:
+			if status == tcforge.GUIStatusAlreadyProcessed {
+				return color.NRGBA{R: 0xe8, G: 0xee, B: 0xf6, A: 0xff}
+			}
+			return color.NRGBA{R: 0xf5, G: 0xf7, B: 0xfa, A: 0xff}
+		}
+	}
 	switch tcforge.GUIStatusTone(status) {
 	case tcforge.GUIStatusToneSuccess:
 		return color.NRGBA{R: 0x23, G: 0x35, B: 0x2b, A: 0xff}
@@ -659,6 +757,13 @@ func statusTint(status string) color.Color {
 		}
 		return color.NRGBA{R: 0x26, G: 0x29, B: 0x2d, A: 0xff}
 	}
+}
+
+func (s *guiState) lightMode() bool {
+	if s.themeChoice == themeChoiceLight {
+		return true
+	}
+	return s.themeChoice == themeChoiceSystem && s.app.Settings().ThemeVariant() == theme.VariantLight
 }
 
 func statusResource(status string) fyne.Resource {
