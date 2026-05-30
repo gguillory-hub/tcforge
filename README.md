@@ -33,6 +33,22 @@ Not yet tested:
 
 Reports from other workflows are very welcome.
 
+## Desktop GUI
+
+Windows release packages include `tcforge-gui.exe` for users who prefer a desktop workflow over the CLI.
+
+Add clips, scan for LTC, review warnings, and fix selected files without needing Go, ffmpeg, ffprobe, or ltcdump installed separately.
+
+![tcforge GUI with a clip ready to scan](docs/assets/tcforge-gui-ready.png)
+
+After scanning, the GUI shows detected media, LTC channel, start timecode, warnings, and the planned output file.
+
+![tcforge GUI showing scanned LTC metadata](docs/assets/tcforge-gui-scanned.png)
+
+When a file is fixed, the status and details panel make the output easy to verify before importing into an NLE.
+
+![tcforge GUI showing a fixed clip](docs/assets/tcforge-gui-fixed.png)
+
 ## Requirements
 
 Required external tools:
