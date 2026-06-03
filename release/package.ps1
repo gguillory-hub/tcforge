@@ -171,7 +171,8 @@ if ($Platform -eq "windows-x64") {
 		Push-Location $repo
 		try {
 			$env:CGO_ENABLED = "1"
-			go build -tags gui -trimpath -ldflags ($ldflags -join " ") -o $guiDestination ./cmd/tcforge-gui
+			$guiLdflags = @("-H=windowsgui") + $ldflags
+			go build -tags gui -trimpath -ldflags ($guiLdflags -join " ") -o $guiDestination ./cmd/tcforge-gui
 		}
 		finally {
 			Pop-Location
@@ -190,13 +191,15 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot "dependencies.json") -Destinatio
 Set-Content -LiteralPath (Join-Path $stage "README-FIRST.txt") -Encoding utf8 -Value @"
 tcforge $Version
 
-This portable package includes tcforge and bundled external tools in tools/.
+This Windows alpha package includes tcforge and bundled external tools in tools/.
 
-Windows: run tcforge-gui.exe for the desktop app, or use tcforge.exe from PowerShell for the CLI. The unsigned installer adds the CLI to PATH and creates a GUI Start Menu shortcut.
+Windows: run tcforge-gui.exe for the desktop app, or use tcforge.exe from PowerShell for the CLI.
+
+No Go, Chocolatey, Homebrew, or separate FFmpeg installation is required.
+
+The installer is currently unsigned, so Windows may show a SmartScreen warning. The installer adds the CLI to PATH, creates a GUI Start Menu shortcut, and the uninstaller removes the app folder and tcforge PATH entry.
 
 macOS packaging is paused until tcforge can be signed and notarized with an Apple Developer certificate.
-
-No Go installation is required.
 "@
 
 if ($Platform -eq "macos-arm64") {

@@ -78,7 +78,7 @@ jobs:
           $commit = "${{ github.sha }}"
           $date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
           $pkg = "github.com/gguillory-hub/tcforge/internal/tcforge"
-          go build -tags gui -trimpath -ldflags "-X $pkg.version=$version -X $pkg.commit=$commit -X $pkg.date=$date" -o prebuilt\tcforge-gui.exe .\cmd\tcforge-gui
+          go build -tags gui -trimpath -ldflags "-H=windowsgui -X $pkg.version=$version -X $pkg.commit=$commit -X $pkg.date=$date" -o prebuilt\tcforge-gui.exe .\cmd\tcforge-gui
       - name: Add GUI runtime dependencies
         shell: msys2 {0}
         run: |
@@ -96,6 +96,14 @@ jobs:
           $commit = "${{ github.sha }}"
           $date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
           ./release/package.ps1 -Platform windows-x64 -Version $version -Commit $commit -Date $date -DependencyDir deps -GUIBinary prebuilt\tcforge-gui.exe -BuildInstaller
+      - name: Smoke test Windows package
+        shell: pwsh
+        run: |
+          if (!(Test-Path dist\tcforge-windows-x64\tcforge.exe)) { throw "Missing tcforge.exe in staged package" }
+          if (!(Test-Path dist\tcforge-windows-x64\tcforge-gui.exe)) { throw "Missing tcforge-gui.exe in staged package" }
+          if (!(Test-Path dist\tcforge-windows-x64.zip)) { throw "Missing portable zip" }
+          if (!(Test-Path dist\tcforge-windows-x64-setup.exe)) { throw "Missing installer" }
+          & .\dist\tcforge-windows-x64\tcforge.exe --version
       - uses: actions/upload-artifact@v4
         with:
           name: tcforge-windows-x64
@@ -115,8 +123,14 @@ jobs:
         with:
           files: artifacts/*
           body: |
-            Unsigned tcforge release for Windows x64.
+            Windows public alpha release for tcforge.
 
-            Windows users may see SmartScreen warnings because this first installer is unsigned.
+            This release includes:
+            - tcforge-gui.exe desktop app
+            - tcforge.exe command-line tool
+            - bundled ffmpeg, ffprobe, and ltcdump tools
+            - portable ZIP and unsigned installer EXE
+
+            Windows users may see SmartScreen warnings because this alpha installer is unsigned. The installer does not require Go, Chocolatey, Homebrew, or a separate FFmpeg install. Uninstall removes the app folder and the tcforge user PATH entry.
 
             macOS packaging is paused until it can be signed and notarized with an Apple Developer certificate.

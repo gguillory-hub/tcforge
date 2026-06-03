@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Sample file sharing
+    url: https://github.com/gguillory-hub/tcforge/issues
+    about: Open an issue first if you can share a sample file. Do not post private client media publicly.

@@ -10,9 +10,11 @@ tcforge fix input.MP4
 
 ## Status
 
-`tcforge` is an early v0.1 CLI. The core workflow has been validated, but broader camera/timecode-box testing is still needed.
+`tcforge` is a Windows public alpha with a desktop GUI and CLI. The core workflow has been validated on one known camera/timecode-box setup, but broader camera, recorder, timecode-box, frame-rate, and NLE testing is still needed.
 
 This is a community utility, not a commercial product. The goal is to make a small, reliable, open tool for a workflow that currently has too few good options.
+
+See [Known Validated Workflows](KNOWN_VALIDATED_WORKFLOWS.md) for the current validation table.
 
 ## Tested With
 
@@ -31,7 +33,7 @@ Not yet tested:
 - macOS or Linux
 - Drop-frame edge cases beyond the current Sony/Deity samples
 
-Reports from other workflows are very welcome.
+Reports from other workflows are very welcome. Please use the GitHub validation report template if tcforge works for your setup, and the bug report template if it does not.
 
 ## Desktop GUI
 
@@ -73,12 +75,14 @@ $env:TCFORGE_LTCDUMP = "C:\Users\you\tools\ltcdump\ltcdump.exe"
 
 ## Installing Release Builds
 
-Windows x64 releases include:
+Windows x64 alpha releases include:
 
 - `tcforge-windows-x64.zip`: portable package
 - `tcforge-windows-x64-setup.exe`: unsigned installer that installs the GUI and CLI, adds `tcforge` to your user `PATH`, and creates a Start Menu shortcut
 
-The first Windows release builds are unsigned, so Windows may show a SmartScreen warning.
+Current Windows alpha builds are unsigned, so Windows may show a SmartScreen warning. Packaged releases include `ffmpeg`, `ffprobe`, and `ltcdump` in the `tools` folder, so normal users do not need Go, Chocolatey, Homebrew, or a separate FFmpeg install.
+
+The Windows uninstaller removes the app folder and the tcforge user `PATH` entry.
 
 macOS packaging is paused until it can be signed and notarized with an Apple Developer certificate.
 
