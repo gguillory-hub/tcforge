@@ -183,14 +183,35 @@ func (s *guiState) buildUI() fyne.CanvasObject {
 	)
 
 	toolbar := container.NewHBox(addFile, addFolder, s.scanButton, s.processButton, settings, selectAll, selectNone)
+	version := widget.NewLabelWithStyle(guiVersionLabel(), fyne.TextAlignTrailing, fyne.TextStyle{})
+	version.Importance = widget.LowImportance
+	topRow := container.NewBorder(nil, nil, nil, version, toolbar)
 	progress := container.NewVBox(s.progressLabel, s.progressBar, s.progressInfinite)
-	header := container.NewVBox(toolbar, outputRow, advanced, progress, widget.NewSeparator())
+	header := container.NewVBox(topRow, outputRow, advanced, progress, widget.NewSeparator())
 	list := container.NewVScroll(s.rowBoxes)
 	right := container.NewVScroll(s.detailPanel)
 	right.SetMinSize(fyne.NewSize(420, 0))
 	body := container.NewHSplit(list, right)
 	body.SetOffset(0.72)
 	return container.NewBorder(header, nil, nil, nil, body)
+}
+
+func guiVersionLabel() string {
+	parts := strings.Fields(tcforge.VersionString())
+	if len(parts) < 2 {
+		return tcforge.VersionString()
+	}
+	label := parts[0] + " " + parts[1]
+	for _, part := range parts[2:] {
+		if commit, ok := strings.CutPrefix(part, "commit="); ok && commit != "" {
+			if len(commit) > 7 {
+				commit = commit[:7]
+			}
+			label += " (" + commit + ")"
+			break
+		}
+	}
+	return label
 }
 
 func (s *guiState) addPaths(paths []string) {
@@ -339,6 +360,7 @@ func (s *guiState) showSettings() {
 	themeSelect.SetSelected(themeLabel(s.themeChoice))
 	content := container.NewVBox(
 		widget.NewLabelWithStyle("Settings", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabel(tcforge.VersionString()),
 		container.NewBorder(nil, nil, widget.NewLabel("Theme"), nil, themeSelect),
 	)
 	fynedialog.ShowCustom("Settings", "Close", content, s.window)
