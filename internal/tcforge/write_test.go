@@ -17,6 +17,7 @@ func TestBuildExtractCommand(t *testing.T) {
 			"-af", "pan=mono|c0=c0",
 			"-ac", "1",
 			"-ar", "48000",
+			"-t", ltcExtractDuration,
 			"ltc.wav",
 		},
 	}

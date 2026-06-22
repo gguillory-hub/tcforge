@@ -38,6 +38,8 @@ type WriteResult struct {
 	Suggestion       string           `json:"suggestion,omitempty"`
 }
 
+const ltcExtractDuration = "60"
+
 func runWrite(args []string) error {
 	fs := flag.NewFlagSet("write", flag.ContinueOnError)
 	channel := fs.String("channel", "auto", "audio channel containing LTC: auto, left, right, or a channel number")
@@ -298,6 +300,7 @@ func buildExtractCommand(input, wavPath, audioMap, panChannel string) CommandSum
 			"-af", "pan=mono|c0=" + panChannel,
 			"-ac", "1",
 			"-ar", "48000",
+			"-t", ltcExtractDuration,
 			wavPath,
 		},
 	}

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestResolveToolUsesBundledToolBeforePath(t *testing.T) {
@@ -135,6 +136,21 @@ func TestVersionStringIncludesInjectedVersion(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("versionString() = %q, want it to contain %q", got, want)
 		}
+	}
+}
+
+func TestCommandTimeoutAllowsLongFFmpegJobs(t *testing.T) {
+	if got := commandTimeout("ffmpeg"); got < 6*time.Hour {
+		t.Fatalf("commandTimeout(ffmpeg) = %v, want at least 6h", got)
+	}
+	if got := commandTimeout("ffmpeg.exe"); got < 6*time.Hour {
+		t.Fatalf("commandTimeout(ffmpeg.exe) = %v, want at least 6h", got)
+	}
+}
+
+func TestCommandTimeoutKeepsOtherToolsBounded(t *testing.T) {
+	if got := commandTimeout("ffprobe"); got != defaultCommandTimeout {
+		t.Fatalf("commandTimeout(ffprobe) = %v, want %v", got, defaultCommandTimeout)
 	}
 }
 

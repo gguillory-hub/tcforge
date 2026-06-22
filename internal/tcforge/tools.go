@@ -17,6 +17,11 @@ import (
 var requiredTools = []string{"ffmpeg", "ffprobe", "ltcdump"}
 var executablePath = os.Executable
 
+const (
+	defaultCommandTimeout = 30 * time.Minute
+	ffmpegCommandTimeout  = 12 * time.Hour
+)
+
 type ToolStatus struct {
 	Name  string `json:"name"`
 	Path  string `json:"path,omitempty"`
@@ -51,7 +56,7 @@ func checkRequiredTools() ([]ToolStatus, error) {
 }
 
 func runCommand(ctx context.Context, program string, args ...string) (string, string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, commandTimeout(program))
 	defer cancel()
 
 	resolvedProgram := program
@@ -65,7 +70,7 @@ func runCommand(ctx context.Context, program string, args ...string) (string, st
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if ctx.Err() != nil {
-		return stdout.String(), stderr.String(), appError("command_timeout", fmt.Sprintf("%s timed out.", program), "Try a shorter clip or confirm the external tool is not waiting for input.", ctx.Err())
+		return stdout.String(), stderr.String(), commandTimeoutError(program, ctx.Err())
 	}
 	if err != nil {
 		detail := strings.TrimSpace(stderr.String())
@@ -89,7 +94,7 @@ func runCommandWithProgress(ctx context.Context, program string, args []string, 
 
 	progressArgs := append([]string{}, args...)
 	progressArgs = append([]string{"-progress", "pipe:1", "-nostats"}, progressArgs...)
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, commandTimeout(program))
 	defer cancel()
 
 	resolvedProgram := program
@@ -116,7 +121,7 @@ func runCommandWithProgress(ctx context.Context, program string, args []string, 
 	err = cmd.Wait()
 	<-done
 	if ctx.Err() != nil {
-		return stdout.String(), stderr.String(), appError("command_timeout", fmt.Sprintf("%s timed out.", program), "Try a shorter clip or confirm the external tool is not waiting for input.", ctx.Err())
+		return stdout.String(), stderr.String(), commandTimeoutError(program, ctx.Err())
 	}
 	if err != nil {
 		detail := strings.TrimSpace(stderr.String())
@@ -128,6 +133,22 @@ func runCommandWithProgress(ctx context.Context, program string, args []string, 
 	}
 	progress(1)
 	return stdout.String(), stderr.String(), nil
+}
+
+func commandTimeout(program string) time.Duration {
+	if strings.EqualFold(filepath.Base(program), "ffmpeg") || strings.EqualFold(filepath.Base(program), "ffmpeg.exe") {
+		return ffmpegCommandTimeout
+	}
+	return defaultCommandTimeout
+}
+
+func commandTimeoutError(program string, err error) error {
+	return appError(
+		"command_timeout",
+		fmt.Sprintf("%s timed out.", program),
+		"Large camera files can take a long time on external or network storage. Confirm the drive is responsive and try again; if this repeats, report the clip duration, file size, and storage type.",
+		err,
+	)
 }
 
 func readFFmpegProgress(reader io.Reader, stdout *bytes.Buffer, durationSeconds float64, progress func(float64)) {
