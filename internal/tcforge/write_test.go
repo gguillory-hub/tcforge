@@ -109,6 +109,20 @@ func TestBuildWriteCommandCleanIgnoresDropLTCAudio(t *testing.T) {
 	}
 }
 
+func TestEnsureAudioChannelAllowsFourthChannel(t *testing.T) {
+	probe := ProbeInfo{Streams: []StreamInfo{{CodecType: "audio", Channels: 4}}}
+	if err := ensureAudioChannel(probe, "4"); err != nil {
+		t.Fatalf("ensureAudioChannel() error = %v", err)
+	}
+}
+
+func TestEnsureAudioChannelRejectsMissingFourthChannel(t *testing.T) {
+	probe := ProbeInfo{Streams: []StreamInfo{{CodecType: "audio", Channels: 2}}}
+	if err := ensureAudioChannel(probe, "4"); err == nil {
+		t.Fatal("expected channel 4 to fail when audio stream only has 2 channels")
+	}
+}
+
 func TestWriteMode(t *testing.T) {
 	if got := writeMode([]CommandSummary{buildWriteCommand(WriteOptions{Input: "in.MP4", Output: "out.mov"}, "10:00:00:00")}); got != "preserve" {
 		t.Fatalf("writeMode() = %q, want preserve", got)

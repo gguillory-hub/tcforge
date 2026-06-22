@@ -134,9 +134,79 @@ func normalizeChannel(raw string) (string, string, error) {
 		return "left", "c0", nil
 	case "right", "r", "2":
 		return "right", "c1", nil
-	default:
-		return "", "", fmt.Errorf("channel must be auto, left, right, 1, or 2")
 	}
+	channel = strings.TrimPrefix(channel, "channel")
+	channel = strings.TrimPrefix(channel, "ch")
+	channel = strings.TrimSpace(channel)
+	n, err := strconv.Atoi(channel)
+	if err != nil || n < 1 {
+		return "", "", fmt.Errorf("channel must be auto, left, right, or a channel number")
+	}
+	if n == 1 {
+		return "left", "c0", nil
+	}
+	if n == 2 {
+		return "right", "c1", nil
+	}
+	return strconv.Itoa(n), fmt.Sprintf("c%d", n-1), nil
+}
+
+func channelNumber(channel string) int {
+	switch strings.ToLower(strings.TrimSpace(channel)) {
+	case "left":
+		return 1
+	case "right":
+		return 2
+	case "auto", "":
+		return 0
+	}
+	n, _ := strconv.Atoi(channel)
+	return n
+}
+
+func displayChannel(channel string) string {
+	switch strings.ToLower(strings.TrimSpace(channel)) {
+	case "":
+		return ""
+	case "left":
+		return "Left channel"
+	case "right":
+		return "Right channel"
+	default:
+		return "Channel " + channel
+	}
+}
+
+func DisplayChannel(channel string) string {
+	return displayChannel(channel)
+}
+
+type ltcChannelCandidate struct {
+	channel    string
+	panChannel string
+	file       string
+}
+
+func ltcChannelCandidates(channels int) []ltcChannelCandidate {
+	if channels < 1 {
+		return nil
+	}
+	candidates := make([]ltcChannelCandidate, 0, channels)
+	for i := 1; i <= channels; i++ {
+		channel := strconv.Itoa(i)
+		switch i {
+		case 1:
+			channel = "left"
+		case 2:
+			channel = "right"
+		}
+		candidates = append(candidates, ltcChannelCandidate{
+			channel:    channel,
+			panChannel: fmt.Sprintf("c%d", i-1),
+			file:       fmt.Sprintf("channel-%d-ltc.wav", i),
+		})
+	}
+	return candidates
 }
 
 func ltcDecodeScore(output string) int {

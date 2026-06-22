@@ -51,11 +51,11 @@ func printUsage() {
 Usage:
   tcforge probe <input> [--scan-ltc --fps <fps>] [--json]
   tcforge verify <input> [--json]
-  tcforge fix <input...> [--fps <fps>] [--output-dir <folder>] [--channel auto|left|right|1|2] [--preserve] [--overwrite] [--allow-fps-mismatch] [--dry-run] [--json] [--verbose]
+  tcforge fix <input...> [--fps <fps>] [--output-dir <folder>] [--channel auto|left|right|1|2|3|4] [--preserve] [--overwrite] [--allow-fps-mismatch] [--dry-run] [--json] [--verbose]
   tcforge fix --manifest <jobs.json> [--output-dir <folder>] [--dry-run] [--json] [--verbose]
   tcforge <input...> [--fps <fps>] [--output-dir <folder>]
-  tcforge write <input> --channel auto|left|right|1|2 --fps <fps> --output <output.mov> [--clean] [--drop-ltc-audio] [--overwrite] [--allow-fps-mismatch] [--dry-run] [--json] [--verbose]
-  tcforge batch <folder> --channel auto|left|right|1|2 --fps <fps> --output-dir <folder> [--clean] [--drop-ltc-audio] [--overwrite] [--dry-run] [--json] [--verbose]
+  tcforge write <input> --channel auto|left|right|1|2|3|4 --fps <fps> --output <output.mov> [--clean] [--drop-ltc-audio] [--overwrite] [--allow-fps-mismatch] [--dry-run] [--json] [--verbose]
+  tcforge batch <folder> --channel auto|left|right|1|2|3|4 --fps <fps> --output-dir <folder> [--clean] [--drop-ltc-audio] [--overwrite] [--dry-run] [--json] [--verbose]
 
 Required external tools on PATH:
   ffmpeg, ffprobe, ltcdump

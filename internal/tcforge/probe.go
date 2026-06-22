@@ -100,7 +100,7 @@ type LTCScanChannel struct {
 func runProbe(args []string) error {
 	fs := flag.NewFlagSet("probe", flag.ContinueOnError)
 	jsonOut := fs.Bool("json", false, "emit JSON")
-	scanLTC := fs.Bool("scan-ltc", false, "decode left and right audio channels and report likely LTC channel")
+	scanLTC := fs.Bool("scan-ltc", false, "decode audio channels and report likely LTC channel")
 	fps := fs.String("fps", "", "expected timecode frame rate for --scan-ltc")
 	if err := fs.Parse(flagsFirst(args, map[string]bool{"fps": true})); err != nil {
 		return err
@@ -129,7 +129,7 @@ func runProbe(args []string) error {
 		if err != nil {
 			return fmt.Errorf("--scan-ltc requires --fps: %w", err)
 		}
-		scan, err := scanLTCChannels(context.Background(), input, validFPS)
+		scan, err := scanLTCChannels(context.Background(), input, validFPS, firstAudioChannels(probe))
 		if err != nil {
 			return err
 		}
@@ -273,7 +273,7 @@ func summarizeProbe(probe ProbeInfo) ProbeSummary {
 	return summary
 }
 
-func scanLTCChannels(ctx context.Context, input, fps string) (LTCScanResult, error) {
+func scanLTCChannels(ctx context.Context, input, fps string, audioChannels int) (LTCScanResult, error) {
 	tempDir, err := os.MkdirTemp("", "tcforge-probe-*")
 	if err != nil {
 		return LTCScanResult{}, err
@@ -281,18 +281,11 @@ func scanLTCChannels(ctx context.Context, input, fps string) (LTCScanResult, err
 	defer os.RemoveAll(tempDir)
 
 	scan := LTCScanResult{FPS: fps}
-	candidates := []struct {
-		channel string
-		pan     string
-		file    string
-	}{
-		{channel: "left", pan: "c0", file: "left-ltc.wav"},
-		{channel: "right", pan: "c1", file: "right-ltc.wav"},
-	}
+	candidates := ltcChannelCandidates(audioChannels)
 	for _, candidate := range candidates {
 		wavPath := filepath.Join(tempDir, candidate.file)
 		ch := LTCScanChannel{Channel: candidate.channel, Status: "not found"}
-		extract := buildExtractCommand(input, wavPath, candidate.pan)
+		extract := buildExtractCommand(input, wavPath, candidate.panChannel)
 		if _, _, err := runCommand(ctx, extract.Program, extract.Args...); err != nil {
 			ch.Status = "error"
 			ch.Error = err.Error()

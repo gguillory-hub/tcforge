@@ -36,7 +36,7 @@ func runFix(args []string) error {
 	output := fs.String("output", "", "output media path")
 	outputDir := fs.String("output-dir", "", "output folder for multi-file runs")
 	manifest := fs.String("manifest", "", "JSON manifest containing per-file fix jobs")
-	channel := fs.String("channel", "auto", "audio channel containing LTC: auto, left, right, 1, or 2")
+	channel := fs.String("channel", "auto", "audio channel containing LTC: auto, left, right, or a channel number")
 	preserve := fs.Bool("preserve", false, "preserve input streams instead of writing clean video plus tmcd")
 	overwrite := fs.Bool("overwrite", false, "overwrite output if it exists")
 	dryRun := fs.Bool("dry-run", false, "print planned commands without writing media")

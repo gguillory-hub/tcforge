@@ -154,7 +154,7 @@ func (s *guiState) buildUI() fyne.CanvasObject {
 		s.editEnabled = enabled
 		s.updateAdvancedEnabled()
 	})
-	channel := widget.NewSelect([]string{"auto", "left", "right"}, func(value string) {
+	channel := widget.NewSelect([]string{"auto", "left", "right", "3", "4"}, func(value string) {
 		s.channel = value
 	})
 	channel.SetSelected("auto")
@@ -324,7 +324,7 @@ func (s *guiState) processSelected() {
 			if err == nil {
 				row.Scan.TCForgeTagged = true
 				row.Scan.Display.StartTimecode = result.DecodedStartTC
-				row.Scan.Display.DetectedLTC = titleWord(result.SelectedChannel) + " channel"
+				row.Scan.Display.DetectedLTC = tcforge.DisplayChannel(result.SelectedChannel)
 				row.Scan.Display.Output = filepath.Base(result.Output)
 				row.Scan.Output = result.Output
 				row.Error = ""

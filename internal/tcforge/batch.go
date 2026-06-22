@@ -18,7 +18,7 @@ type BatchResult struct {
 
 func runBatch(args []string) error {
 	fs := flag.NewFlagSet("batch", flag.ContinueOnError)
-	channel := fs.String("channel", "auto", "audio channel containing LTC: auto, left, right, 1, or 2")
+	channel := fs.String("channel", "auto", "audio channel containing LTC: auto, left, right, or a channel number")
 	fps := fs.String("fps", "", "timecode frame rate")
 	outputDir := fs.String("output-dir", "", "output folder")
 	clean := fs.Bool("clean", false, "write clean NLE timecode files with video plus generated tmcd only")

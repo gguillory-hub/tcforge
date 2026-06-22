@@ -86,6 +86,8 @@ func TestNormalizeChannel(t *testing.T) {
 		"right": "c1",
 		"2":     "c1",
 		"R":     "c1",
+		"3":     "c2",
+		"ch4":   "c3",
 	}
 	for input, wantPan := range tests {
 		_, gotPan, err := normalizeChannel(input)
@@ -94,6 +96,38 @@ func TestNormalizeChannel(t *testing.T) {
 		}
 		if gotPan != wantPan {
 			t.Fatalf("normalizeChannel(%q) pan = %q, want %q", input, gotPan, wantPan)
+		}
+	}
+}
+
+func TestLTCChannelCandidatesIncludesAllAudioChannels(t *testing.T) {
+	got := ltcChannelCandidates(4)
+	if len(got) != 4 {
+		t.Fatalf("ltcChannelCandidates(4) length = %d, want 4", len(got))
+	}
+	if got[0].channel != "left" || got[0].panChannel != "c0" {
+		t.Fatalf("candidate 1 = %#v", got[0])
+	}
+	if got[1].channel != "right" || got[1].panChannel != "c1" {
+		t.Fatalf("candidate 2 = %#v", got[1])
+	}
+	if got[2].channel != "3" || got[2].panChannel != "c2" {
+		t.Fatalf("candidate 3 = %#v", got[2])
+	}
+	if got[3].channel != "4" || got[3].panChannel != "c3" {
+		t.Fatalf("candidate 4 = %#v", got[3])
+	}
+}
+
+func TestDisplayChannel(t *testing.T) {
+	tests := map[string]string{
+		"left":  "Left channel",
+		"right": "Right channel",
+		"3":     "Channel 3",
+	}
+	for input, want := range tests {
+		if got := displayChannel(input); got != want {
+			t.Fatalf("displayChannel(%q) = %q, want %q", input, got, want)
 		}
 	}
 }

@@ -99,7 +99,7 @@ tcforge fix input.MP4
 This will:
 
 - infer the video frame rate
-- auto-detect whether LTC is on the left or right audio channel
+- auto-detect which audio channel contains LTC, including 4-channel camera audio
 - decode the LTC start timecode
 - write a clean `.mov` containing the first video stream plus generated `tmcd`
 - leave the original file untouched

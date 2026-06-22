@@ -192,7 +192,7 @@ func ScanClip(ctx context.Context, input string, settings GUIGlobalSettings) Cli
 		scan.TechnicalLog = scanTechnicalLog(scan)
 		return scan
 	}
-	ltc, err := scanLTCChannels(ctx, input, fps)
+	ltc, err := scanLTCChannels(ctx, input, fps, firstAudioChannels(probe.Probe))
 	if err != nil {
 		code, suggestion := appErrorFields(err)
 		scan.ErrorCode = code
@@ -208,7 +208,7 @@ func ScanClip(ctx context.Context, input string, settings GUIGlobalSettings) Cli
 		if scan.GUIStatus == GUIStatusReady {
 			scan.GUIStatus = GUIStatusNoAudioLTCFound
 		}
-		scan.Warnings = append(scan.Warnings, "No audio LTC found on left or right channel.")
+		scan.Warnings = append(scan.Warnings, fmt.Sprintf("No audio LTC found on %d audio channel(s).", firstAudioChannels(probe.Probe)))
 	} else if scan.GUIStatus == "" {
 		scan.GUIStatus = GUIStatusReady
 	}
@@ -316,7 +316,7 @@ func clipDisplay(scan ClipScan) ClipDisplay {
 		display.Audio = strings.Join(nonEmptyStrings(channelLabel(a.Channels), sampleRateLabel(a.SampleRate)), ", ")
 	}
 	if scan.LTCScan != nil && scan.LTCScan.SelectedChannel != "" {
-		display.DetectedLTC = titleWord(scan.LTCScan.SelectedChannel) + " channel"
+		display.DetectedLTC = displayChannel(scan.LTCScan.SelectedChannel)
 		display.StartTimecode = scan.LTCScan.SelectedTimecode
 	} else if len(scan.Summary.ExistingTimecodes) > 0 {
 		display.StartTimecode = scan.Summary.ExistingTimecodes[0].Value
