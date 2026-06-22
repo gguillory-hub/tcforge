@@ -171,10 +171,6 @@ func ScanClip(ctx context.Context, input string, settings GUIGlobalSettings) Cli
 		scan.TechnicalLog = scanTechnicalLog(scan)
 		return scan
 	}
-	if len(probe.Summary.ExistingTimecodes) > 0 {
-		scan.GUIStatus = GUIStatusAlreadyHasTimecode
-		scan.Warnings = append(scan.Warnings, "This file already has timecode metadata.")
-	}
 	if scan.OutputExists && !scan.Overwrite {
 		scan.Warnings = append(scan.Warnings, fmt.Sprintf("Output already exists and overwrite is off: %s", probe.Output))
 		if scan.GUIStatus == GUIStatusReady {
@@ -209,12 +205,36 @@ func ScanClip(ctx context.Context, input string, settings GUIGlobalSettings) Cli
 			scan.GUIStatus = GUIStatusNoAudioLTCFound
 		}
 		scan.Warnings = append(scan.Warnings, fmt.Sprintf("No audio LTC found on %d audio channel(s).", audioChannelCount(probe.Probe)))
-	} else if scan.GUIStatus == "" {
-		scan.GUIStatus = GUIStatusReady
 	}
+	applyExistingTimecodeStatus(&scan)
 	scan.Display = clipDisplay(scan)
 	scan.TechnicalLog = scanTechnicalLog(scan)
 	return scan
+}
+
+func applyExistingTimecodeStatus(scan *ClipScan) {
+	if len(scan.Summary.ExistingTimecodes) == 0 {
+		return
+	}
+	if scan.LTCScan != nil && scan.LTCScan.SelectedTimecode != "" {
+		if mismatch := timecodeMismatch(scan.Summary.ExistingTimecodes, scan.LTCScan.SelectedTimecode); mismatch != "" {
+			scan.Warnings = append(scan.Warnings, "Audio LTC differs from existing camera timecode metadata. Fix will write the detected audio LTC timecode to the output file.")
+			scan.Warnings = append(scan.Warnings, mismatch)
+			if scan.GUIStatus == GUIStatusReady || scan.GUIStatus == GUIStatusAlreadyHasTimecode {
+				scan.GUIStatus = GUIStatusNeedsAttention
+			}
+			return
+		}
+		scan.Warnings = append(scan.Warnings, "Existing timecode metadata matches detected audio LTC.")
+		if scan.GUIStatus == GUIStatusReady {
+			scan.GUIStatus = GUIStatusAlreadyHasTimecode
+		}
+		return
+	}
+	scan.Warnings = append(scan.Warnings, "This file already has timecode metadata.")
+	if scan.GUIStatus == GUIStatusReady {
+		scan.GUIStatus = GUIStatusAlreadyHasTimecode
+	}
 }
 
 func DefaultOutput(input, outputDir string) string {

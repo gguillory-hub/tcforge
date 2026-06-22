@@ -97,6 +97,45 @@ func TestAudioDisplaySummarizesMultipleMonoStreams(t *testing.T) {
 	}
 }
 
+func TestExistingTimecodeMismatchNeedsAttention(t *testing.T) {
+	scan := ClipScan{
+		ClipProbe: ClipProbe{Summary: ProbeSummary{ExistingTimecodes: []TimecodeReference{
+			{Location: "stream #5", Value: "01:37:39:23"},
+		}}},
+		LTCScan:   &LTCScanResult{SelectedChannel: "3", SelectedTimecode: "00:21:38:17"},
+		GUIStatus: GUIStatusReady,
+	}
+
+	applyExistingTimecodeStatus(&scan)
+
+	if scan.GUIStatus != GUIStatusNeedsAttention {
+		t.Fatalf("GUIStatus = %q, want %q", scan.GUIStatus, GUIStatusNeedsAttention)
+	}
+	want := "Audio LTC differs from existing camera timecode metadata. Fix will write the detected audio LTC timecode to the output file."
+	if !containsString(scan.Warnings, want) {
+		t.Fatalf("Warnings = %#v, want %q", scan.Warnings, want)
+	}
+}
+
+func TestExistingTimecodeMatchAlreadyHasTimecode(t *testing.T) {
+	scan := ClipScan{
+		ClipProbe: ClipProbe{Summary: ProbeSummary{ExistingTimecodes: []TimecodeReference{
+			{Location: "stream #5", Value: "00:21:38:17"},
+		}}},
+		LTCScan:   &LTCScanResult{SelectedChannel: "3", SelectedTimecode: "00:21:38:17"},
+		GUIStatus: GUIStatusReady,
+	}
+
+	applyExistingTimecodeStatus(&scan)
+
+	if scan.GUIStatus != GUIStatusAlreadyHasTimecode {
+		t.Fatalf("GUIStatus = %q, want %q", scan.GUIStatus, GUIStatusAlreadyHasTimecode)
+	}
+	if !containsString(scan.Warnings, "Existing timecode metadata matches detected audio LTC.") {
+		t.Fatalf("Warnings = %#v", scan.Warnings)
+	}
+}
+
 func TestClassifyWriteResult(t *testing.T) {
 	if got := ClassifyWriteResult(WriteResult{Status: "ok"}, nil); got != GUIStatusFixed {
 		t.Fatalf("ClassifyWriteResult(ok) = %q", got)
@@ -129,4 +168,13 @@ func touch(t *testing.T, path string) {
 	if err := os.WriteFile(path, []byte("test"), 0644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
