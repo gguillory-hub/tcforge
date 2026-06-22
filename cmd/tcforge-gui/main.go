@@ -96,12 +96,12 @@ func main() {
 
 func (s *guiState) buildUI() fyne.CanvasObject {
 	addFile := widget.NewButtonWithIcon("Add Files", theme.FileIcon(), func() {
-		path, err := nativedialog.File().Title("Add Media File").Filter("Media files", "mp4", "mov", "m4v", "mxf").Load()
+		paths, err := openMediaFiles()
 		if err != nil {
 			s.handleNativeDialogError(err)
 			return
 		}
-		s.addPaths([]string{path})
+		s.addPaths(paths)
 	})
 	addFolder := widget.NewButtonWithIcon("Add Folder", theme.FolderOpenIcon(), func() {
 		path, err := nativedialog.Directory().Title("Add Media Folder").Browse()
