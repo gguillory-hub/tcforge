@@ -183,30 +183,70 @@ func DisplayChannel(channel string) string {
 
 type ltcChannelCandidate struct {
 	channel    string
+	audioMap   string
 	panChannel string
 	file       string
 }
 
-func ltcChannelCandidates(channels int) []ltcChannelCandidate {
-	if channels < 1 {
-		return nil
-	}
-	candidates := make([]ltcChannelCandidate, 0, channels)
-	for i := 1; i <= channels; i++ {
-		channel := strconv.Itoa(i)
-		switch i {
-		case 1:
-			channel = "left"
-		case 2:
-			channel = "right"
+func ltcChannelCandidates(probe ProbeInfo) []ltcChannelCandidate {
+	var candidates []ltcChannelCandidate
+	globalChannel := 0
+	audioStream := 0
+	for _, stream := range probe.Streams {
+		if stream.CodecType != "audio" {
+			continue
 		}
-		candidates = append(candidates, ltcChannelCandidate{
-			channel:    channel,
-			panChannel: fmt.Sprintf("c%d", i-1),
-			file:       fmt.Sprintf("channel-%d-ltc.wav", i),
-		})
+		channels := stream.Channels
+		if channels < 1 {
+			channels = 1
+		}
+		for streamChannel := 1; streamChannel <= channels; streamChannel++ {
+			globalChannel++
+			channel := strconv.Itoa(globalChannel)
+			switch globalChannel {
+			case 1:
+				channel = "left"
+			case 2:
+				channel = "right"
+			}
+			candidates = append(candidates, ltcChannelCandidate{
+				channel:    channel,
+				audioMap:   fmt.Sprintf("0:a:%d", audioStream),
+				panChannel: fmt.Sprintf("c%d", streamChannel-1),
+				file:       fmt.Sprintf("channel-%d-ltc.wav", globalChannel),
+			})
+		}
+		audioStream++
 	}
 	return candidates
+}
+
+func audioChannelCount(probe ProbeInfo) int {
+	total := 0
+	for _, stream := range probe.Streams {
+		if stream.CodecType != "audio" {
+			continue
+		}
+		if stream.Channels < 1 {
+			total++
+			continue
+		}
+		total += stream.Channels
+	}
+	return total
+}
+
+func findLTCChannelCandidate(probe ProbeInfo, channel string) (ltcChannelCandidate, bool) {
+	requested := channelNumber(channel)
+	if requested < 1 {
+		return ltcChannelCandidate{}, false
+	}
+	for i, candidate := range ltcChannelCandidates(probe) {
+		if i+1 == requested || strings.EqualFold(candidate.channel, channel) {
+			return candidate, true
+		}
+	}
+	return ltcChannelCandidate{}, false
 }
 
 func ltcDecodeScore(output string) int {

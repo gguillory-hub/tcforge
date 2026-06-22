@@ -84,6 +84,19 @@ func TestHumanSummaryFormatsMedia(t *testing.T) {
 	}
 }
 
+func TestAudioDisplaySummarizesMultipleMonoStreams(t *testing.T) {
+	got := audioDisplay([]AudioSummary{
+		{Channels: 1, SampleRate: "48000"},
+		{Channels: 1, SampleRate: "48000"},
+		{Channels: 1, SampleRate: "48000"},
+		{Channels: 1, SampleRate: "48000"},
+	})
+	want := "4 mono audio streams, 4 channels, 48 kHz"
+	if got != want {
+		t.Fatalf("audioDisplay() = %q, want %q", got, want)
+	}
+}
+
 func TestClassifyWriteResult(t *testing.T) {
 	if got := ClassifyWriteResult(WriteResult{Status: "ok"}, nil); got != GUIStatusFixed {
 		t.Fatalf("ClassifyWriteResult(ok) = %q", got)

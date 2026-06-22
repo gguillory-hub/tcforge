@@ -6,15 +6,15 @@ import (
 )
 
 func TestBuildExtractCommand(t *testing.T) {
-	got := buildExtractCommand("in.MP4", "ltc.wav", "c1")
+	got := buildExtractCommand("in.MP4", "ltc.wav", "0:a:1", "c0")
 	want := CommandSummary{
 		Program: "ffmpeg",
 		Args: []string{
 			"-y",
 			"-i", "in.MP4",
 			"-vn",
-			"-map", "0:a:0",
-			"-af", "pan=mono|c0=c1",
+			"-map", "0:a:1",
+			"-af", "pan=mono|c0=c0",
 			"-ac", "1",
 			"-ar", "48000",
 			"ltc.wav",

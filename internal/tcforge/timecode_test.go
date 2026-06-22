@@ -101,20 +101,35 @@ func TestNormalizeChannel(t *testing.T) {
 }
 
 func TestLTCChannelCandidatesIncludesAllAudioChannels(t *testing.T) {
-	got := ltcChannelCandidates(4)
+	got := ltcChannelCandidates(ProbeInfo{Streams: []StreamInfo{
+		{CodecType: "audio", Channels: 1},
+		{CodecType: "audio", Channels: 1},
+		{CodecType: "audio", Channels: 1},
+		{CodecType: "audio", Channels: 1},
+	}})
 	if len(got) != 4 {
 		t.Fatalf("ltcChannelCandidates(4) length = %d, want 4", len(got))
 	}
-	if got[0].channel != "left" || got[0].panChannel != "c0" {
+	if got[0].channel != "left" || got[0].audioMap != "0:a:0" || got[0].panChannel != "c0" {
 		t.Fatalf("candidate 1 = %#v", got[0])
 	}
-	if got[1].channel != "right" || got[1].panChannel != "c1" {
+	if got[1].channel != "right" || got[1].audioMap != "0:a:1" || got[1].panChannel != "c0" {
 		t.Fatalf("candidate 2 = %#v", got[1])
 	}
-	if got[2].channel != "3" || got[2].panChannel != "c2" {
+	if got[2].channel != "3" || got[2].audioMap != "0:a:2" || got[2].panChannel != "c0" {
 		t.Fatalf("candidate 3 = %#v", got[2])
 	}
-	if got[3].channel != "4" || got[3].panChannel != "c3" {
+	if got[3].channel != "4" || got[3].audioMap != "0:a:3" || got[3].panChannel != "c0" {
+		t.Fatalf("candidate 4 = %#v", got[3])
+	}
+}
+
+func TestLTCChannelCandidatesIncludesChannelsInsideSingleStream(t *testing.T) {
+	got := ltcChannelCandidates(ProbeInfo{Streams: []StreamInfo{{CodecType: "audio", Channels: 4}}})
+	if len(got) != 4 {
+		t.Fatalf("ltcChannelCandidates() length = %d, want 4", len(got))
+	}
+	if got[3].channel != "4" || got[3].audioMap != "0:a:0" || got[3].panChannel != "c3" {
 		t.Fatalf("candidate 4 = %#v", got[3])
 	}
 }

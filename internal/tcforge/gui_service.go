@@ -192,7 +192,7 @@ func ScanClip(ctx context.Context, input string, settings GUIGlobalSettings) Cli
 		scan.TechnicalLog = scanTechnicalLog(scan)
 		return scan
 	}
-	ltc, err := scanLTCChannels(ctx, input, fps, firstAudioChannels(probe.Probe))
+	ltc, err := scanLTCChannels(ctx, input, fps, probe.Probe)
 	if err != nil {
 		code, suggestion := appErrorFields(err)
 		scan.ErrorCode = code
@@ -208,7 +208,7 @@ func ScanClip(ctx context.Context, input string, settings GUIGlobalSettings) Cli
 		if scan.GUIStatus == GUIStatusReady {
 			scan.GUIStatus = GUIStatusNoAudioLTCFound
 		}
-		scan.Warnings = append(scan.Warnings, fmt.Sprintf("No audio LTC found on %d audio channel(s).", firstAudioChannels(probe.Probe)))
+		scan.Warnings = append(scan.Warnings, fmt.Sprintf("No audio LTC found on %d audio channel(s).", audioChannelCount(probe.Probe)))
 	} else if scan.GUIStatus == "" {
 		scan.GUIStatus = GUIStatusReady
 	}
@@ -311,10 +311,7 @@ func clipDisplay(scan ClipScan) ClipDisplay {
 		}
 		display.Video = strings.Join(nonEmptyStrings(res, fpsLabel(fps), codec), ", ")
 	}
-	if len(scan.Summary.Audio) > 0 {
-		a := scan.Summary.Audio[0]
-		display.Audio = strings.Join(nonEmptyStrings(channelLabel(a.Channels), sampleRateLabel(a.SampleRate)), ", ")
-	}
+	display.Audio = audioDisplay(scan.Summary.Audio)
 	if scan.LTCScan != nil && scan.LTCScan.SelectedChannel != "" {
 		display.DetectedLTC = displayChannel(scan.LTCScan.SelectedChannel)
 		display.StartTimecode = scan.LTCScan.SelectedTimecode
@@ -385,6 +382,33 @@ func channelLabel(channels int) string {
 		return "1 channel"
 	}
 	return fmt.Sprintf("%d channels", channels)
+}
+
+func audioDisplay(audio []AudioSummary) string {
+	if len(audio) == 0 {
+		return ""
+	}
+	if len(audio) == 1 {
+		a := audio[0]
+		return strings.Join(nonEmptyStrings(channelLabel(a.Channels), sampleRateLabel(a.SampleRate)), ", ")
+	}
+	totalChannels := 0
+	sameSampleRate := audio[0].SampleRate
+	for _, a := range audio {
+		if a.Channels <= 0 {
+			totalChannels++
+		} else {
+			totalChannels += a.Channels
+		}
+		if a.SampleRate != sameSampleRate {
+			sameSampleRate = ""
+		}
+	}
+	streamLabel := fmt.Sprintf("%d audio streams", len(audio))
+	if totalChannels == len(audio) {
+		streamLabel = fmt.Sprintf("%d mono audio streams", len(audio))
+	}
+	return strings.Join(nonEmptyStrings(streamLabel, channelLabel(totalChannels), sampleRateLabel(sameSampleRate)), ", ")
 }
 
 func sampleRateLabel(sampleRate string) string {

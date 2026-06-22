@@ -109,7 +109,7 @@ func writeOne(ctx context.Context, options WriteOptions) (WriteResult, error) {
 	if err := ensureOutputWritable(options.Output, options.Overwrite); err != nil {
 		return fail(err)
 	}
-	channel, panChannel, err := normalizeChannel(options.Channel)
+	channel, _, err := normalizeChannel(options.Channel)
 	if err != nil {
 		return fail(err)
 	}
@@ -151,17 +151,18 @@ func writeOne(ctx context.Context, options WriteOptions) (WriteResult, error) {
 		result.DecodedStartTC = "dry-run"
 		if channel == "auto" {
 			result.SelectedChannel = "auto"
-			for _, candidate := range ltcChannelCandidates(firstAudioChannels(probe)) {
+			for _, candidate := range ltcChannelCandidates(probe) {
 				wavPath := filepath.Join(tempDir, candidate.file)
 				result.Commands = append(result.Commands,
-					buildExtractCommand(options.Input, wavPath, candidate.panChannel),
+					buildExtractCommand(options.Input, wavPath, candidate.audioMap, candidate.panChannel),
 					buildLTCDumpCommand(wavPath, fps),
 				)
 			}
 		} else {
+			candidate, _ := findLTCChannelCandidate(probe, channel)
 			wavPath := filepath.Join(tempDir, "ltc.wav")
 			result.Commands = append(result.Commands,
-				buildExtractCommand(options.Input, wavPath, panChannel),
+				buildExtractCommand(options.Input, wavPath, candidate.audioMap, candidate.panChannel),
 				buildLTCDumpCommand(wavPath, fps),
 			)
 		}
@@ -172,7 +173,7 @@ func writeOne(ctx context.Context, options WriteOptions) (WriteResult, error) {
 	}
 
 	emitProgress(options, "Decoding audio LTC", 0.2, false)
-	decode, err := decodeLTC(ctx, options.Input, tempDir, channel, panChannel, fps, firstAudioChannels(probe))
+	decode, err := decodeLTC(ctx, options.Input, tempDir, channel, fps, probe)
 	if err != nil {
 		return fail(err)
 	}
@@ -205,10 +206,14 @@ type decodeResult struct {
 	Commands []CommandSummary
 }
 
-func decodeLTC(ctx context.Context, input, tempDir, channel, panChannel, fps string, audioChannels int) (decodeResult, error) {
+func decodeLTC(ctx context.Context, input, tempDir, channel, fps string, probe ProbeInfo) (decodeResult, error) {
 	if channel != "auto" {
+		candidate, ok := findLTCChannelCandidate(probe, channel)
+		if !ok {
+			return decodeResult{}, appError("audio_channel_missing", fmt.Sprintf("%s requested, but input has %d audio channel(s).", displayChannel(channel), audioChannelCount(probe)), "Use --channel auto, or run probe --scan-ltc --fps <fps> to let tcforge inspect all available audio streams.", nil)
+		}
 		wavPath := filepath.Join(tempDir, "ltc.wav")
-		extract := buildExtractCommand(input, wavPath, panChannel)
+		extract := buildExtractCommand(input, wavPath, candidate.audioMap, candidate.panChannel)
 		ltcDump := buildLTCDumpCommand(wavPath, fps)
 		if _, _, err := runCommand(ctx, extract.Program, extract.Args...); err != nil {
 			return decodeResult{}, err
@@ -233,12 +238,12 @@ func decodeLTC(ctx context.Context, input, tempDir, channel, panChannel, fps str
 		}, nil
 	}
 
-	candidates := ltcChannelCandidates(audioChannels)
+	candidates := ltcChannelCandidates(probe)
 	results := make([]decodeResult, 0, len(candidates))
 	var commands []CommandSummary
 	for _, candidate := range candidates {
 		wavPath := filepath.Join(tempDir, candidate.file)
-		extract := buildExtractCommand(input, wavPath, candidate.panChannel)
+		extract := buildExtractCommand(input, wavPath, candidate.audioMap, candidate.panChannel)
 		ltcDump := buildLTCDumpCommand(wavPath, fps)
 		commands = append(commands, extract, ltcDump)
 		if _, _, err := runCommand(ctx, extract.Program, extract.Args...); err != nil {
@@ -262,7 +267,7 @@ func decodeLTC(ctx context.Context, input, tempDir, channel, panChannel, fps str
 	if len(results) == 0 {
 		return decodeResult{Commands: commands}, appError(
 			"ltc_not_found",
-			fmt.Sprintf("Auto channel detection failed: no valid LTC found on %d audio channel(s).", audioChannels),
+			fmt.Sprintf("Auto channel detection failed: no valid LTC found on %d audio channel(s).", audioChannelCount(probe)),
 			"Check that the timecode box was connected to the camera audio input, the audio level was not muted/clipped, and the correct file was selected. You can run probe --scan-ltc --fps <fps> for details.",
 			nil,
 		)
@@ -279,14 +284,17 @@ func buildLTCDumpCommand(wavPath, fps string) CommandSummary {
 	return CommandSummary{Program: "ltcdump", Args: []string{"--fps", ltcDumpFPS(fps), wavPath}}
 }
 
-func buildExtractCommand(input, wavPath, panChannel string) CommandSummary {
+func buildExtractCommand(input, wavPath, audioMap, panChannel string) CommandSummary {
+	if audioMap == "" {
+		audioMap = "0:a:0"
+	}
 	return CommandSummary{
 		Program: "ffmpeg",
 		Args: []string{
 			"-y",
 			"-i", input,
 			"-vn",
-			"-map", "0:a:0",
+			"-map", audioMap,
 			"-af", "pan=mono|c0=" + panChannel,
 			"-ac", "1",
 			"-ar", "48000",
@@ -323,25 +331,16 @@ func buildWriteCommand(options WriteOptions, timecode string) CommandSummary {
 }
 
 func ensureAudioChannel(probe ProbeInfo, channel string) error {
-	for _, s := range probe.Streams {
-		if s.CodecType == "audio" {
-			requested := channelNumber(channel)
-			if requested > s.Channels {
-				return appError("audio_channel_missing", fmt.Sprintf("%s requested, but first audio stream has %d channel(s).", displayChannel(channel), s.Channels), "Use --channel auto, or run probe --scan-ltc --fps <fps> to let tcforge inspect all available channels.", nil)
-			}
-			return nil
-		}
+	if audioChannelCount(probe) == 0 {
+		return appError("audio_missing", "No audio stream found.", "Audio LTC must be recorded on a camera audio track. Choose a file with audio LTC, or use a camera file that already has metadata timecode.", nil)
 	}
-	return appError("audio_missing", "No audio stream found.", "Audio LTC must be recorded on a camera audio track. Choose a file with audio LTC, or use a camera file that already has metadata timecode.", nil)
-}
-
-func firstAudioChannels(probe ProbeInfo) int {
-	for _, s := range probe.Streams {
-		if s.CodecType == "audio" {
-			return s.Channels
-		}
+	if channel == "auto" {
+		return nil
 	}
-	return 0
+	if _, ok := findLTCChannelCandidate(probe, channel); !ok {
+		return appError("audio_channel_missing", fmt.Sprintf("%s requested, but input has %d audio channel(s).", displayChannel(channel), audioChannelCount(probe)), "Use --channel auto, or run probe --scan-ltc --fps <fps> to let tcforge inspect all available audio streams.", nil)
+	}
+	return nil
 }
 
 func ensureVideoStream(probe ProbeInfo) error {
