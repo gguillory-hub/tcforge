@@ -59,6 +59,7 @@ func runCommand(ctx context.Context, program string, args ...string) (string, st
 		resolvedProgram = resolved
 	}
 	cmd := exec.CommandContext(ctx, resolvedProgram, args...)
+	configureCommand(cmd)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -96,6 +97,7 @@ func runCommandWithProgress(ctx context.Context, program string, args []string, 
 		resolvedProgram = resolved
 	}
 	cmd := exec.CommandContext(ctx, resolvedProgram, progressArgs...)
+	configureCommand(cmd)
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return "", "", err
