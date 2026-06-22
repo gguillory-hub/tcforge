@@ -146,6 +146,9 @@ func TestClassifyWriteResult(t *testing.T) {
 	if got := ClassifyWriteResult(WriteResult{ErrorCode: "output_exists"}, assertErr{}); got != GUIStatusNeedsAttention {
 		t.Fatalf("ClassifyWriteResult(output_exists) = %q", got)
 	}
+	if got := ClassifyWriteResult(WriteResult{ErrorCode: "command_canceled"}, assertErr{}); got != GUIStatusNeedsAttention {
+		t.Fatalf("ClassifyWriteResult(command_canceled) = %q", got)
+	}
 }
 
 func TestHasTCForgeMetadata(t *testing.T) {

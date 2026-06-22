@@ -1,6 +1,8 @@
 package tcforge
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -121,6 +123,17 @@ func TestEnsureAudioChannelRejectsMissingFourthChannel(t *testing.T) {
 	probe := ProbeInfo{Streams: []StreamInfo{{CodecType: "audio", Channels: 2}}}
 	if err := ensureAudioChannel(probe, "4"); err == nil {
 		t.Fatal("expected channel 4 to fail when audio stream only has 2 channels")
+	}
+}
+
+func TestRemoveCanceledOutput(t *testing.T) {
+	output := filepath.Join(t.TempDir(), "partial.mov")
+	if err := os.WriteFile(output, []byte("partial"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	removeCanceledOutput(output)
+	if _, err := os.Stat(output); !os.IsNotExist(err) {
+		t.Fatalf("output still exists after cancel cleanup: %v", err)
 	}
 }
 

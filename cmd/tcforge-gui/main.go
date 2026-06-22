@@ -59,6 +59,8 @@ type guiState struct {
 	progressBar      *widget.ProgressBar
 	progressInfinite *widget.ProgressBarInfinite
 	progressLabel    *widget.Label
+	cancelButton     *widget.Button
+	cancelFunc       context.CancelFunc
 	detailPanel      *fyne.Container
 	mismatchWarning  *fyne.Container
 	advancedFields   []fyne.Disableable
@@ -89,6 +91,11 @@ func main() {
 	state.progressInfinite.Hide()
 	state.refreshDetails()
 	state.rowBoxes.Add(emptyListState())
+	w.SetCloseIntercept(func() {
+		state.cancelActiveBatch()
+		w.SetCloseIntercept(nil)
+		w.Close()
+	})
 
 	w.SetContent(state.buildUI())
 	w.ShowAndRun()
@@ -123,6 +130,11 @@ func (s *guiState) buildUI() fyne.CanvasObject {
 		s.processSelected()
 	})
 	s.processButton.Importance = widget.HighImportance
+	s.cancelButton = widget.NewButtonWithIcon("Cancel All", theme.CancelIcon(), func() {
+		s.cancelActiveBatch()
+	})
+	s.cancelButton.Importance = widget.MediumImportance
+	s.cancelButton.Disable()
 	settings := widget.NewButtonWithIcon("Settings", theme.SettingsIcon(), func() {
 		s.showSettings()
 	})
@@ -182,7 +194,7 @@ func (s *guiState) buildUI() fyne.CanvasObject {
 		s.mismatchWarning,
 	)
 
-	toolbar := container.NewHBox(addFile, addFolder, s.scanButton, s.processButton, settings, selectAll, selectNone)
+	toolbar := container.NewHBox(addFile, addFolder, s.scanButton, s.processButton, s.cancelButton, settings, selectAll, selectNone)
 	version := widget.NewLabelWithStyle(guiVersionLabel(), fyne.TextAlignTrailing, fyne.TextStyle{})
 	version.Importance = widget.LowImportance
 	topRow := container.NewBorder(nil, nil, nil, version, toolbar)
@@ -258,13 +270,26 @@ func (s *guiState) scanSelected() {
 		fynedialog.ShowInformation("No clips selected", "Select one or more clips to scan.", s.window)
 		return
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s.setCancelFunc(cancel)
 	s.setBusy(true)
 	go func() {
+		defer s.setCancelFunc(nil)
 		counts := map[string]int{}
 		for i, row := range selected {
+			if ctx.Err() != nil {
+				s.setRowStatus(row, tcforge.GUIStatusNeedsAttention, "Canceled", 0, false)
+				counts["Canceled"]++
+				break
+			}
 			s.setProgress(fmt.Sprintf("Scanning %d of %d: %s", i+1, len(selected), tcforge.DisplayName(row.Path)), batchPercent(i, len(selected)), false)
 			s.setRowStatus(row, tcforge.GUIStatusScanning, "Scanning", 0, false)
-			scan := tcforge.ScanClip(context.Background(), row.Path, s.settings())
+			scan := tcforge.ScanClip(ctx, row.Path, s.settings())
+			if ctx.Err() != nil {
+				s.setRowStatus(row, tcforge.GUIStatusNeedsAttention, "Canceled", 0, false)
+				counts["Canceled"]++
+				break
+			}
 			s.mu.Lock()
 			row.Scan = scan
 			row.Status = scan.GUIStatus
@@ -277,6 +302,10 @@ func (s *guiState) scanSelected() {
 			s.refreshRows()
 			s.refreshDetails()
 		}
+		if ctx.Err() != nil {
+			s.finishBatch("Scan canceled", counts)
+			return
+		}
 		s.finishBatch("Scan complete", counts)
 	}()
 }
@@ -287,13 +316,26 @@ func (s *guiState) processSelected() {
 		fynedialog.ShowInformation("No clips selected", "Select one or more clips to fix.", s.window)
 		return
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s.setCancelFunc(cancel)
 	s.setBusy(true)
 	go func() {
+		defer s.setCancelFunc(nil)
 		counts := map[string]int{}
 		for i, row := range selected {
+			if ctx.Err() != nil {
+				s.setRowStatus(row, tcforge.GUIStatusNeedsAttention, "Canceled", 0, false)
+				counts["Canceled"]++
+				break
+			}
 			s.setProgress(fmt.Sprintf("Fixing %d of %d: %s", i+1, len(selected), tcforge.DisplayName(row.Path)), batchPercent(i, len(selected)), false)
 			if row.Scan.Status != "ok" && row.Scan.LTCScan == nil {
-				scan := tcforge.ScanClip(context.Background(), row.Path, s.settings())
+				scan := tcforge.ScanClip(ctx, row.Path, s.settings())
+				if ctx.Err() != nil {
+					s.setRowStatus(row, tcforge.GUIStatusNeedsAttention, "Canceled", 0, false)
+					counts["Canceled"]++
+					break
+				}
 				s.mu.Lock()
 				row.Scan = scan
 				row.Status = scan.GUIStatus
@@ -307,7 +349,7 @@ func (s *guiState) processSelected() {
 				}
 			}
 			s.setRowStatus(row, tcforge.GUIStatusProcessing, "Processing", 0, false)
-			result, err := tcforge.FixClipWithProgress(context.Background(), row.Path, s.settings(), func(event tcforge.GUIProgressEvent) {
+			result, err := tcforge.FixClipWithProgress(ctx, row.Path, s.settings(), func(event tcforge.GUIProgressEvent) {
 				s.setRowStatus(row, tcforge.GUIStatusProcessing, event.Stage, event.Percent, event.Exact)
 				if event.Exact {
 					s.setProgress(fmt.Sprintf("%s: %s", tcforge.DisplayName(row.Path), event.Stage), event.Percent, true)
@@ -315,6 +357,11 @@ func (s *guiState) processSelected() {
 					s.setProgress(fmt.Sprintf("%s: %s", tcforge.DisplayName(row.Path), event.Stage), batchPercent(i, len(selected)), false)
 				}
 			})
+			if ctx.Err() != nil {
+				s.setRowStatus(row, tcforge.GUIStatusNeedsAttention, "Canceled", 0, false)
+				counts["Canceled"]++
+				break
+			}
 			status := tcforge.ClassifyWriteResult(result, err)
 			s.mu.Lock()
 			row.Result = result
@@ -336,6 +383,10 @@ func (s *guiState) processSelected() {
 			s.mu.Unlock()
 			s.refreshRows()
 			s.refreshDetails()
+		}
+		if ctx.Err() != nil {
+			s.finishBatch("Fix canceled", counts)
+			return
 		}
 		s.finishBatch("Fix complete", counts)
 	}()
@@ -410,11 +461,29 @@ func (s *guiState) setBusy(busy bool) {
 		if busy {
 			s.scanButton.Disable()
 			s.processButton.Disable()
+			s.cancelButton.Enable()
 			return
 		}
 		s.scanButton.Enable()
 		s.processButton.Enable()
+		s.cancelButton.Disable()
 	})
+}
+
+func (s *guiState) setCancelFunc(cancel context.CancelFunc) {
+	s.mu.Lock()
+	s.cancelFunc = cancel
+	s.mu.Unlock()
+}
+
+func (s *guiState) cancelActiveBatch() {
+	s.mu.Lock()
+	cancel := s.cancelFunc
+	s.mu.Unlock()
+	if cancel != nil {
+		cancel()
+		s.setProgress("Canceling current job...", 0, false)
+	}
 }
 
 func (s *guiState) setRowStatus(row *clipRow, status, stage string, progress float64, exact bool) {
@@ -574,16 +643,23 @@ func (s *guiState) rowWidget(row *clipRow) fyne.CanvasObject {
 		s.refreshDetails()
 		s.showDetails(row)
 	})
+	cancel := widget.NewButtonWithIcon("Cancel", theme.CancelIcon(), func() {
+		s.cancelActiveBatch()
+	})
 	openOutput := widget.NewButton("Open Output", func() {
 		s.openOutput(row)
 	})
 	if !outputAvailable(row) {
 		openOutput.Disable()
 	}
+	if row.Status != tcforge.GUIStatusScanning && row.Status != tcforge.GUIStatusProcessing {
+		cancel.Hide()
+	}
 	showDetails.Importance = widget.LowImportance
+	cancel.Importance = widget.MediumImportance
 	openOutput.Importance = widget.LowImportance
 
-	header := container.NewBorder(nil, nil, container.NewHBox(check, statusIcon, statusText), container.NewHBox(showDetails, openOutput), name)
+	header := container.NewBorder(nil, nil, container.NewHBox(check, statusIcon, statusText), container.NewHBox(showDetails, cancel, openOutput), name)
 	objects := []fyne.CanvasObject{header, timecode, summary}
 	if notice := s.rowNotice(row); notice != nil {
 		objects = append(objects, notice)

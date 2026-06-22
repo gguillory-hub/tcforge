@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -143,6 +144,14 @@ func commandTimeout(program string) time.Duration {
 }
 
 func commandTimeoutError(program string, err error) error {
+	if errors.Is(err, context.Canceled) {
+		return appError(
+			"command_canceled",
+			fmt.Sprintf("%s was canceled.", program),
+			"The job was canceled. Any partial output file from the active write was removed.",
+			err,
+		)
+	}
 	return appError(
 		"command_timeout",
 		fmt.Sprintf("%s timed out.", program),

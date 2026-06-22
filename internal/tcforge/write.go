@@ -188,11 +188,21 @@ func writeOne(ctx context.Context, options WriteOptions) (WriteResult, error) {
 	if _, _, err := runCommandWithProgress(ctx, writeCmd.Program, writeCmd.Args, probe.Format.Duration, func(percent float64) {
 		emitProgress(options, "Writing output file", percent, true)
 	}); err != nil {
+		if ctx.Err() != nil {
+			removeCanceledOutput(options.Output)
+		}
 		return fail(err)
 	}
 	emitProgress(options, "Done", 1, true)
 	result.Status = "ok"
 	return result, nil
+}
+
+func removeCanceledOutput(output string) {
+	if output == "" {
+		return
+	}
+	_ = os.Remove(output)
 }
 
 func emitProgress(options WriteOptions, stage string, percent float64, exact bool) {

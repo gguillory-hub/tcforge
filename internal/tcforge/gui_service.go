@@ -284,6 +284,8 @@ func classifyGUIError(code string) string {
 	switch code {
 	case "ltc_not_found":
 		return GUIStatusNoAudioLTCFound
+	case "command_canceled":
+		return GUIStatusNeedsAttention
 	case "output_exists", "fps_mismatch", "audio_channel_missing":
 		return GUIStatusNeedsAttention
 	case "":
