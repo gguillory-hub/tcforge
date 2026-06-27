@@ -171,6 +171,19 @@ func TestPlausibleTimecode(t *testing.T) {
 	}
 }
 
+func TestTimecodeFormat(t *testing.T) {
+	tests := map[string]string{
+		"00:05:22:22": timecodeFormatNonDrop,
+		"00:05:22;22": timecodeFormatDrop,
+		"not a tc":    timecodeFormatUnknown,
+	}
+	for input, want := range tests {
+		if got := timecodeFormat(input); got != want {
+			t.Fatalf("timecodeFormat(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
 func TestLTCDumpFPS(t *testing.T) {
 	tests := map[string]string{
 		"23.976": "24000/1001",

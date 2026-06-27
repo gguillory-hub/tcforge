@@ -233,6 +233,9 @@ func printProbe(result ProbeResult) {
 		}
 		if result.LTCScan.SelectedChannel != "" {
 			fmt.Printf("Recommended channel: %s (%s)\n", result.LTCScan.SelectedChannel, result.LTCScan.SelectedTimecode)
+			if warning := timecodeFormatMismatch(result.Summary.ExistingTimecodes, result.LTCScan.SelectedTimecode); warning != "" {
+				fmt.Println("Warning:", warning)
+			}
 			if mismatch := timecodeMismatch(result.Summary.ExistingTimecodes, result.LTCScan.SelectedTimecode); mismatch != "" {
 				fmt.Println("Warning:", mismatch)
 			}
@@ -350,6 +353,21 @@ func timecodeMismatch(existing []TimecodeReference, decoded string) string {
 		if normalizeTimecodeSeparators(tc.Value) != normalizedDecoded {
 			return fmt.Sprintf("decoded LTC %s differs from existing %s timecode %s", decoded, tc.Location, tc.Value)
 		}
+	}
+	return ""
+}
+
+func timecodeFormatMismatch(existing []TimecodeReference, decoded string) string {
+	decodedFormat := timecodeFormat(decoded)
+	if decodedFormat == timecodeFormatUnknown {
+		return ""
+	}
+	for _, tc := range existing {
+		existingFormat := timecodeFormat(tc.Value)
+		if existingFormat == timecodeFormatUnknown || existingFormat == decodedFormat {
+			continue
+		}
+		return fmt.Sprintf("Existing camera timecode appears %s, but decoded audio LTC appears %s. Check camera and timecode-box settings before syncing.", existingFormat, decodedFormat)
 	}
 	return ""
 }

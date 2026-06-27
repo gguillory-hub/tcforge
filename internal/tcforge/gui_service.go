@@ -217,12 +217,23 @@ func applyExistingTimecodeStatus(scan *ClipScan) {
 		return
 	}
 	if scan.LTCScan != nil && scan.LTCScan.SelectedTimecode != "" {
+		formatMismatchFound := false
+		if formatMismatch := timecodeFormatMismatch(scan.Summary.ExistingTimecodes, scan.LTCScan.SelectedTimecode); formatMismatch != "" {
+			scan.Warnings = append(scan.Warnings, formatMismatch)
+			formatMismatchFound = true
+			if scan.GUIStatus == GUIStatusReady || scan.GUIStatus == GUIStatusAlreadyHasTimecode {
+				scan.GUIStatus = GUIStatusNeedsAttention
+			}
+		}
 		if mismatch := timecodeMismatch(scan.Summary.ExistingTimecodes, scan.LTCScan.SelectedTimecode); mismatch != "" {
 			scan.Warnings = append(scan.Warnings, "Audio LTC differs from existing camera timecode metadata. Fix will write the detected audio LTC timecode to the output file.")
 			scan.Warnings = append(scan.Warnings, mismatch)
 			if scan.GUIStatus == GUIStatusReady || scan.GUIStatus == GUIStatusAlreadyHasTimecode {
 				scan.GUIStatus = GUIStatusNeedsAttention
 			}
+			return
+		}
+		if formatMismatchFound {
 			return
 		}
 		scan.Warnings = append(scan.Warnings, "Existing timecode metadata matches detected audio LTC.")
@@ -271,6 +282,35 @@ func ClassifyWriteResult(result WriteResult, err error) string {
 
 func HumanSummary(scan ClipScan) ClipDisplay {
 	return clipDisplay(scan)
+}
+
+func BatchScanWarnings(scans []ClipScan) []string {
+	existingFormats := map[string]bool{}
+	ltcFormats := map[string]bool{}
+	for _, scan := range scans {
+		for _, tc := range scan.Summary.ExistingTimecodes {
+			if format := timecodeFormat(tc.Value); format != timecodeFormatUnknown {
+				existingFormats[format] = true
+			}
+		}
+		if scan.LTCScan != nil && scan.LTCScan.SelectedTimecode != "" {
+			if format := timecodeFormat(scan.LTCScan.SelectedTimecode); format != timecodeFormatUnknown {
+				ltcFormats[format] = true
+			}
+		}
+	}
+
+	var warnings []string
+	if existingFormats[timecodeFormatDrop] && existingFormats[timecodeFormatNonDrop] {
+		warnings = append(warnings, "Scanned files contain mixed existing camera timecode formats: drop-frame and non-drop. Check camera settings before syncing.")
+	}
+	if existingFormats[timecodeFormatDrop] && ltcFormats[timecodeFormatNonDrop] {
+		warnings = append(warnings, "Scanned files contain mixed timecode formats: existing camera metadata includes drop-frame, but decoded audio LTC includes non-drop. Check camera and timecode-box settings before syncing.")
+	}
+	if existingFormats[timecodeFormatNonDrop] && ltcFormats[timecodeFormatDrop] {
+		warnings = append(warnings, "Scanned files contain mixed timecode formats: existing camera metadata includes non-drop, but decoded audio LTC includes drop-frame. Check camera and timecode-box settings before syncing.")
+	}
+	return warnings
 }
 
 func scanFPS(probe ClipProbe, settings GUIGlobalSettings) string {

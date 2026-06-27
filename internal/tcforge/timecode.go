@@ -10,6 +10,12 @@ import (
 
 var timecodePattern = regexp.MustCompile(`\b([0-2]\d):([0-5]\d):([0-5]\d)([:;])([0-5]\d)\b`)
 
+const (
+	timecodeFormatUnknown = ""
+	timecodeFormatDrop    = "drop-frame"
+	timecodeFormatNonDrop = "non-drop"
+)
+
 func parseLTCStart(output string) (string, error) {
 	timecodes := findTimecodes(output)
 	if len(timecodes) == 0 {
@@ -275,4 +281,19 @@ func plausibleTimecode(tc string) bool {
 		return false
 	}
 	return frames <= 30
+}
+
+func timecodeFormat(tc string) string {
+	match := timecodePattern.FindStringSubmatch(tc)
+	if match == nil {
+		return timecodeFormatUnknown
+	}
+	switch match[4] {
+	case ";":
+		return timecodeFormatDrop
+	case ":":
+		return timecodeFormatNonDrop
+	default:
+		return timecodeFormatUnknown
+	}
 }

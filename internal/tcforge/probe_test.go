@@ -68,3 +68,19 @@ func TestTimecodeMismatchIgnoresSeparatorOnlyDifference(t *testing.T) {
 		t.Fatalf("timecodeMismatch() = %q, want empty", got)
 	}
 }
+
+func TestTimecodeFormatMismatch(t *testing.T) {
+	existing := []TimecodeReference{{Location: "format", Value: "00:05:22;22"}}
+	got := timecodeFormatMismatch(existing, "00:05:22:22")
+	want := "Existing camera timecode appears drop-frame, but decoded audio LTC appears non-drop. Check camera and timecode-box settings before syncing."
+	if got != want {
+		t.Fatalf("timecodeFormatMismatch() = %q, want %q", got, want)
+	}
+}
+
+func TestTimecodeFormatMismatchIgnoresMatchingFormats(t *testing.T) {
+	existing := []TimecodeReference{{Location: "format", Value: "00:05:22:22"}}
+	if got := timecodeFormatMismatch(existing, "00:05:22:22"); got != "" {
+		t.Fatalf("timecodeFormatMismatch() = %q, want empty", got)
+	}
+}

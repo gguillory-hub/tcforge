@@ -136,6 +136,54 @@ func TestExistingTimecodeMatchAlreadyHasTimecode(t *testing.T) {
 	}
 }
 
+func TestExistingTimecodeFormatMismatchNeedsAttention(t *testing.T) {
+	scan := ClipScan{
+		ClipProbe: ClipProbe{Summary: ProbeSummary{ExistingTimecodes: []TimecodeReference{
+			{Location: "format", Value: "00:21:38;17"},
+		}}},
+		LTCScan:   &LTCScanResult{SelectedChannel: "3", SelectedTimecode: "00:21:38:17"},
+		GUIStatus: GUIStatusReady,
+	}
+
+	applyExistingTimecodeStatus(&scan)
+
+	if scan.GUIStatus != GUIStatusNeedsAttention {
+		t.Fatalf("GUIStatus = %q, want %q", scan.GUIStatus, GUIStatusNeedsAttention)
+	}
+	want := "Existing camera timecode appears drop-frame, but decoded audio LTC appears non-drop. Check camera and timecode-box settings before syncing."
+	if !containsString(scan.Warnings, want) {
+		t.Fatalf("Warnings = %#v, want %q", scan.Warnings, want)
+	}
+	if containsString(scan.Warnings, "Existing timecode metadata matches detected audio LTC.") {
+		t.Fatalf("Warnings should not report a normal match when formats differ: %#v", scan.Warnings)
+	}
+}
+
+func TestBatchScanWarningsDetectMixedTimecodeFormats(t *testing.T) {
+	scans := []ClipScan{
+		{
+			ClipProbe: ClipProbe{Summary: ProbeSummary{ExistingTimecodes: []TimecodeReference{
+				{Location: "format", Value: "00:21:31;25"},
+			}}},
+		},
+		{
+			ClipProbe: ClipProbe{Summary: ProbeSummary{ExistingTimecodes: []TimecodeReference{
+				{Location: "stream #5", Value: "01:37:39:23"},
+			}}},
+			LTCScan: &LTCScanResult{SelectedChannel: "3", SelectedTimecode: "00:21:38:17"},
+		},
+	}
+
+	warnings := BatchScanWarnings(scans)
+
+	if !containsString(warnings, "Scanned files contain mixed existing camera timecode formats: drop-frame and non-drop. Check camera settings before syncing.") {
+		t.Fatalf("Warnings = %#v", warnings)
+	}
+	if !containsString(warnings, "Scanned files contain mixed timecode formats: existing camera metadata includes drop-frame, but decoded audio LTC includes non-drop. Check camera and timecode-box settings before syncing.") {
+		t.Fatalf("Warnings = %#v", warnings)
+	}
+}
+
 func TestClassifyWriteResult(t *testing.T) {
 	if got := ClassifyWriteResult(WriteResult{Status: "ok"}, nil); got != GUIStatusFixed {
 		t.Fatalf("ClassifyWriteResult(ok) = %q", got)

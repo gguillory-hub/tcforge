@@ -276,6 +276,7 @@ func (s *guiState) scanSelected() {
 	go func() {
 		defer s.setCancelFunc(nil)
 		counts := map[string]int{}
+		var scans []tcforge.ClipScan
 		for i, row := range selected {
 			if ctx.Err() != nil {
 				s.setRowStatus(row, tcforge.GUIStatusNeedsAttention, "Canceled", 0, false)
@@ -298,15 +299,16 @@ func (s *guiState) scanSelected() {
 			row.Stage = ""
 			row.Progress = 0
 			counts[row.Status]++
+			scans = append(scans, scan)
 			s.mu.Unlock()
 			s.refreshRows()
 			s.refreshDetails()
 		}
 		if ctx.Err() != nil {
-			s.finishBatch("Scan canceled", counts)
+			s.finishBatch("Scan canceled", counts, nil)
 			return
 		}
-		s.finishBatch("Scan complete", counts)
+		s.finishBatch("Scan complete", counts, tcforge.BatchScanWarnings(scans))
 	}()
 }
 
@@ -385,17 +387,20 @@ func (s *guiState) processSelected() {
 			s.refreshDetails()
 		}
 		if ctx.Err() != nil {
-			s.finishBatch("Fix canceled", counts)
+			s.finishBatch("Fix canceled", counts, nil)
 			return
 		}
-		s.finishBatch("Fix complete", counts)
+		s.finishBatch("Fix complete", counts, nil)
 	}()
 }
 
-func (s *guiState) finishBatch(title string, counts map[string]int) {
+func (s *guiState) finishBatch(title string, counts map[string]int, warnings []string) {
 	s.setBusy(false)
 	s.setProgress("Ready", 0, false)
 	body := summaryText(counts)
+	if len(warnings) > 0 {
+		body += "\n\nWarnings:\n" + strings.Join(warnings, "\n")
+	}
 	s.app.SendNotification(fyne.NewNotification(title, body))
 	fyne.Do(func() {
 		fynedialog.ShowInformation(title, body, s.window)
